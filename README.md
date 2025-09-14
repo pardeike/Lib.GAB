@@ -16,6 +16,65 @@ Lib.GAB provides a complete GABP-compliant server implementation that allows app
 - **Easy Integration**: Simple API for quick setup and customization
 - **Wide Compatibility**: Targets .NET Standard 2.0
 
+## GABS Integration
+
+Lib.GAB seamlessly integrates with [GABS](https://github.com/pardeike/GABS) (Game Agent Bridge Server) for AI-controlled gaming experiences.
+
+### Automatic GABS Detection
+
+When your game is launched by GABS, Lib.GAB automatically detects the GABS environment and configures itself appropriately:
+
+```csharp
+// Automatically detects and uses GABS configuration if available
+// Falls back to standard configuration if not running under GABS
+var server = Gabp.CreateGabsAwareServer("My Game", "1.0.0");
+
+// With tools from a class instance
+var gameTools = new GameTools();
+var server = Gabp.CreateGabsAwareServerWithInstance("My Game", "1.0.0", gameTools);
+
+await server.StartAsync();
+```
+
+### GABS Environment Variables
+
+GABS provides configuration through environment variables:
+- `GABS_GAME_ID`: Game identifier from GABS configuration
+- `GABP_SERVER_PORT`: Port your mod should listen on as GABP server
+- `GABP_TOKEN`: Authentication token for GABS connections
+
+### Checking GABS Environment
+
+You can check if your application is running under GABS:
+
+```csharp
+if (Gabp.IsRunningUnderGabs())
+{
+    Console.WriteLine("Running under GABS control");
+    // Use GABS-aware server creation
+    var server = Gabp.CreateGabsAwareServer("My Game", "1.0.0");
+}
+else
+{
+    Console.WriteLine("Running standalone");
+    // Use traditional server creation
+    var server = Gabp.CreateSimpleServer("My Game", "1.0.0");
+}
+```
+
+### Manual GABS Configuration
+
+For advanced scenarios, you can manually configure GABS settings:
+
+```csharp
+// Read GABS environment manually
+var gameId = Environment.GetEnvironmentVariable("GABS_GAME_ID");
+var port = int.Parse(Environment.GetEnvironmentVariable("GABP_SERVER_PORT"));
+var token = Environment.GetEnvironmentVariable("GABP_TOKEN");
+
+var server = Gabp.CreateServerWithExternalConfig("My Game", "1.0.0", port, token, gameId);
+```
+
 ## Quick Start
 
 For applications that manage their own configuration:
