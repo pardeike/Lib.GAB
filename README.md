@@ -14,6 +14,7 @@ Lib.GAB provides a complete GABP-compliant server implementation that allows gam
 - **Event System**: Real-time event broadcasting to connected bridges
 - **Session Management**: Token-based authentication and capability negotiation
 - **Easy Integration**: Simple API for quick setup and customization
+- **Wide Compatibility**: Targets .NET Standard 2.0 for maximum compatibility including .NET Framework 4.7.2
 
 ## Quick Start
 
@@ -26,7 +27,7 @@ using Lib.GAB;
 var server = Gabp.CreateSimpleServer("My Game", "1.0.0");
 
 // Register a tool manually
-server.Tools.RegisterTool("game/status", _ => Task.FromResult<object?>(new
+server.Tools.RegisterTool("game/status", _ => Task.FromResult<object>(new
 {
     status = "running",
     players = 1
@@ -189,8 +190,15 @@ See `Lib.GAB.Example` for a complete working example showing:
 
 ## Requirements
 
-- .NET 8.0 or later
+- **.NET Standard 2.0** compatible runtime:
+  - .NET Framework 4.7.2 or later (for RimWorld mods, Unity applications)
+  - .NET Core 2.0 or later
+  - .NET 5.0 or later
 - Windows, macOS, or Linux
+
+## RimWorld Mod Compatibility
+
+This library is specifically designed to work with **RimWorld mods** running on **.NET Framework 4.7.2** and Unity. The library targets .NET Standard 2.0 to ensure maximum compatibility with Unity and older .NET Framework versions.
 
 ## License
 
