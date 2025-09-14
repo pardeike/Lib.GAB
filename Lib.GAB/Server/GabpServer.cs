@@ -42,7 +42,7 @@ namespace Lib.GAB.Server
         /// <summary>
         /// Whether to write configuration file for bridges to connect
         /// </summary>
-        public bool WriteConfigFile { get; set; } = true;
+        public bool WriteConfigFile { get; set; } = false;
     }
 
     /// <summary>

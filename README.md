@@ -18,12 +18,36 @@ Lib.GAB provides a complete GABP-compliant server implementation that allows gam
 
 ## Quick Start
 
-### Basic Usage
+### Using External Configuration (Recommended for Mods)
+
+For mods that use external bridge configuration (e.g., from GABS), use the external configuration API to specify port and token:
+
+```csharp
+// Read configuration from external source (e.g., GABS bridge file)
+int port = ReadPortFromExternalConfig();
+string token = ReadTokenFromExternalConfig();
+string gameId = ReadGameIdFromExternalConfig();
+
+// Create server with external configuration
+var server = Gabp.CreateServerWithExternalConfig("My Game Mod", "1.0.0", port, token, gameId);
+
+// Or with tools from a class instance
+var gameTools = new GameTools();
+var server = Gabp.CreateServerWithInstanceAndExternalConfig("My Game Mod", "1.0.0", gameTools, port, token, gameId);
+
+await server.StartAsync();
+```
+
+### Traditional Usage (Self-Managed)
+
+### Traditional Usage (Self-Managed)
+
+For standalone applications that manage their own configuration:
 
 ```csharp
 using Lib.GAB;
 
-// Create a simple server
+// Create a simple server (no config file written by default)
 var server = Gabp.CreateSimpleServer("My Game", "1.0.0");
 
 // Register a tool manually
@@ -42,6 +66,19 @@ Console.WriteLine($"Token: {server.Token}");
 Console.ReadKey();
 await server.StopAsync();
 ```
+
+### Legacy Bridge File Support
+
+If you need the library to write a bridge configuration file (legacy behavior), use the `WriteConfigFile` method:
+
+```csharp
+var server = Gabp.CreateServer()
+    .UseAppInfo("My Game", "1.0.0")  
+    .WriteConfigFile(true)  // Explicitly enable config file writing
+    .Build();
+```
+
+**Note**: The `WriteConfigFile` method is deprecated. External bridge management tools like GABS should handle configuration files.
 
 ### Using Attribute-Based Tools
 
@@ -150,12 +187,19 @@ var channels = server.Events.GetAvailableChannels();
 ### Server Configuration
 
 ```csharp
+// Modern approach: Use external configuration from GABS
+var server = Gabp.CreateServer()
+    .UseAppInfo("My Game", "2.0.0")    // App information
+    .UseExternalConfig(port, token, gameId)  // From external bridge
+    .Build();
+
+// Legacy approach: Let library manage everything
 var server = Gabp.CreateServer()
     .UsePort(12345)                    // Specific port (0 for auto)
     .UseToken("my-custom-token")       // Custom auth token
     .UseAgentId("my-game-mod")         // Agent identifier
     .UseAppInfo("My Game", "2.0.0")    // App information
-    .WriteConfigFile(true)             // Write config for bridges
+    .WriteConfigFile(true)             // Write config for bridges (deprecated)
     .Build();
 ```
 
@@ -172,13 +216,36 @@ Lib.GAB implements GABP 1.0 specification including:
 
 ## Bridge Connection
 
-When a server starts, it creates a configuration file that bridges can use to connect:
+**Important**: Starting with this version, the library **no longer automatically creates configuration files**. This allows external bridge management tools like [GABS](https://github.com/pardeike/GABS) to handle configuration properly.
+
+### For Mod Developers
+
+If you're developing a mod that should work with GABS, use the external configuration API:
+
+```csharp
+// Read from GABS bridge file or environment variables
+int port = ReadFromGabsBridge();
+string token = ReadTokenFromGabsBridge(); 
+string gameId = ReadGameIdFromGabsBridge();
+
+var server = Gabp.CreateServerWithExternalConfig("My Mod", "1.0.0", port, token, gameId);
+await server.StartAsync();
+```
+
+### Legacy Bridge File Support
+
+If you need the old behavior where the library writes configuration files:
 
 **Windows**: `%APPDATA%\gabp\bridge.json`  
 **macOS**: `~/Library/Application Support/gabp/bridge.json`  
 **Linux**: `~/.config/gabp/bridge.json`
 
-The configuration contains the connection details and authentication token.
+```csharp
+var server = Gabp.CreateServer()
+    .UseAppInfo("My Game", "1.0.0")
+    .WriteConfigFile(true)  // Explicitly enable (deprecated)
+    .Build();
+```
 
 ## Example
 
