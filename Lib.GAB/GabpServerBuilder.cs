@@ -48,15 +48,7 @@ namespace Lib.GAB
             return this;
         }
 
-        /// <summary>
-        /// Whether to write configuration file for bridges to connect (deprecated - config files should be managed externally)
-        /// </summary>
-        [Obsolete("Config file writing should be handled externally. Use UseExternalConfig() to set port and token from external sources.")]
-        public GabpServerBuilder WriteConfigFile(bool write = true)
-        {
-            _config.WriteConfigFile = write;
-            return this;
-        }
+
 
         /// <summary>
         /// Set the port and authentication token from external configuration (e.g., from GABS bridge file)

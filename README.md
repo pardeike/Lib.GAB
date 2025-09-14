@@ -67,19 +67,6 @@ Console.ReadKey();
 await server.StopAsync();
 ```
 
-### Legacy Bridge File Support
-
-If you need the library to write a bridge configuration file (legacy behavior), use the `WriteConfigFile` method:
-
-```csharp
-var server = Gabp.CreateServer()
-    .UseAppInfo("My Game", "1.0.0")  
-    .WriteConfigFile(true)  // Explicitly enable config file writing
-    .Build();
-```
-
-**Note**: The `WriteConfigFile` method is deprecated. External bridge management tools like GABS should handle configuration files.
-
 ### Using Attribute-Based Tools
 
 ```csharp
@@ -187,19 +174,10 @@ var channels = server.Events.GetAvailableChannels();
 ### Server Configuration
 
 ```csharp
-// Modern approach: Use external configuration from GABS
+// Use external configuration from GABS
 var server = Gabp.CreateServer()
     .UseAppInfo("My Game", "2.0.0")    // App information
     .UseExternalConfig(port, token, gameId)  // From external bridge
-    .Build();
-
-// Legacy approach: Let library manage everything
-var server = Gabp.CreateServer()
-    .UsePort(12345)                    // Specific port (0 for auto)
-    .UseToken("my-custom-token")       // Custom auth token
-    .UseAgentId("my-game-mod")         // Agent identifier
-    .UseAppInfo("My Game", "2.0.0")    // App information
-    .WriteConfigFile(true)             // Write config for bridges (deprecated)
     .Build();
 ```
 
@@ -230,21 +208,6 @@ string gameId = ReadGameIdFromGabsBridge();
 
 var server = Gabp.CreateServerWithExternalConfig("My Mod", "1.0.0", port, token, gameId);
 await server.StartAsync();
-```
-
-### Legacy Bridge File Support
-
-If you need the old behavior where the library writes configuration files:
-
-**Windows**: `%APPDATA%\gabp\bridge.json`  
-**macOS**: `~/Library/Application Support/gabp/bridge.json`  
-**Linux**: `~/.config/gabp/bridge.json`
-
-```csharp
-var server = Gabp.CreateServer()
-    .UseAppInfo("My Game", "1.0.0")
-    .WriteConfigFile(true)  // Explicitly enable (deprecated)
-    .Build();
 ```
 
 ## Example
