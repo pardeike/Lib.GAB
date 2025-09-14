@@ -1,10 +1,10 @@
 # Lib.GAB
 
-A .NET library implementing the GABP (Game Agent Bridge Protocol) server for AI-game communication.
+A .NET library implementing the GABP (Game Agent Bridge Protocol) server for AI-application communication.
 
 ## Overview
 
-Lib.GAB provides a complete GABP-compliant server implementation that allows games and applications to expose functionality to AI agents and automation tools. The library handles all the protocol details while providing a simple API for registering tools and emitting events.
+Lib.GAB provides a complete GABP-compliant server implementation that allows applications to expose functionality to AI agents and automation tools. The library handles all the protocol details while providing a simple API for registering tools and emitting events.
 
 ## Features
 
@@ -14,47 +14,23 @@ Lib.GAB provides a complete GABP-compliant server implementation that allows gam
 - **Event System**: Real-time event broadcasting to connected bridges
 - **Session Management**: Token-based authentication and capability negotiation
 - **Easy Integration**: Simple API for quick setup and customization
-- **Wide Compatibility**: Targets .NET Standard 2.0 for maximum compatibility including .NET Framework 4.7.2
+- **Wide Compatibility**: Targets .NET Standard 2.0
 
 ## Quick Start
 
-### Using External Configuration (Recommended for Mods)
-
-For mods that use external bridge configuration (e.g., from GABS), use the external configuration API to specify port and token:
-
-```csharp
-// Read configuration from external source (e.g., GABS bridge file)
-int port = ReadPortFromExternalConfig();
-string token = ReadTokenFromExternalConfig();
-string gameId = ReadGameIdFromExternalConfig();
-
-// Create server with external configuration
-var server = Gabp.CreateServerWithExternalConfig("My Game Mod", "1.0.0", port, token, gameId);
-
-// Or with tools from a class instance
-var gameTools = new GameTools();
-var server = Gabp.CreateServerWithInstanceAndExternalConfig("My Game Mod", "1.0.0", gameTools, port, token, gameId);
-
-await server.StartAsync();
-```
-
-### Traditional Usage (Self-Managed)
-
-### Traditional Usage (Self-Managed)
-
-For standalone applications that manage their own configuration:
+For applications that manage their own configuration:
 
 ```csharp
 using Lib.GAB;
 
-// Create a simple server (no config file written by default)
-var server = Gabp.CreateSimpleServer("My Game", "1.0.0");
+// Create a simple server
+var server = Gabp.CreateSimpleServer("My Application", "1.0.0");
 
 // Register a tool manually
-server.Tools.RegisterTool("game/status", _ => Task.FromResult<object>(new
+server.Tools.RegisterTool("app/status", _ => Task.FromResult<object>(new
 {
     status = "running",
-    players = 1
+    timestamp = DateTime.UtcNow
 }));
 
 // Start the server
@@ -67,50 +43,48 @@ Console.ReadKey();
 await server.StopAsync();
 ```
 
-### Using Attribute-Based Tools
+## Attribute-Based Tools
 
 ```csharp
 using Lib.GAB;
 using Lib.GAB.Tools;
 
-public class GameTools
+public class ApplicationTools
 {
-    [Tool("inventory/get", Description = "Get player inventory")]
-    public object GetInventory([ToolParameter(Description = "Player ID")] string playerId)
+    [Tool("data/get", Description = "Get application data")]
+    public object GetData([ToolParameter(Description = "Data ID")] string dataId)
     {
-        return new { playerId, items = GetPlayerItems(playerId) };
+        return new { dataId, value = GetDataValue(dataId) };
     }
 
-    [Tool("world/place_block", Description = "Place a block in the world")]
-    public async Task<object> PlaceBlock(
-        [ToolParameter(Description = "Block type")] string blockType,
-        [ToolParameter(Description = "X coordinate")] int x,
-        [ToolParameter(Description = "Y coordinate")] int y,
-        [ToolParameter(Description = "Z coordinate")] int z)
+    [Tool("action/execute", Description = "Execute an action")]
+    public async Task<object> ExecuteAction(
+        [ToolParameter(Description = "Action type")] string actionType,
+        [ToolParameter(Description = "Parameters")] string parameters)
     {
-        await PlaceBlockAsync(blockType, x, y, z);
-        return new { success = true, position = new { x, y, z } };
+        await ExecuteActionAsync(actionType, parameters);
+        return new { success = true, actionType };
     }
 }
 
 // Register tools from a class instance
-var gameTools = new GameTools();
-var server = Gabp.CreateServerWithInstance("My Game", "1.0.0", gameTools);
+var appTools = new ApplicationTools();
+var server = Gabp.CreateServerWithInstance("My Application", "1.0.0", appTools);
 await server.StartAsync();
 ```
 
-### Event Broadcasting
+## Event Broadcasting
 
 ```csharp
 // Register event channels
-server.Events.RegisterChannel("player/move", "Player movement events");
-server.Events.RegisterChannel("world/block_change", "Block change events");
+server.Events.RegisterChannel("app/status_change", "Application status events");
+server.Events.RegisterChannel("data/update", "Data update events");
 
 // Emit events
-await server.Events.EmitEventAsync("player/move", new
+await server.Events.EmitEventAsync("app/status_change", new
 {
-    playerId = "player1",
-    position = new { x = 100, y = 64, z = 200 }
+    status = "ready",
+    timestamp = DateTime.UtcNow
 });
 ```
 
@@ -120,19 +94,19 @@ await server.Events.EmitEventAsync("player/move", new
 
 The main server class that handles GABP connections and protocol implementation.
 
-#### Properties
+**Properties:**
 - `Port`: The port the server is listening on
 - `Token`: The authentication token for bridge connections
 - `Tools`: Tool registry for managing available tools
 - `Events`: Event manager for broadcasting events
 
-#### Methods
+**Methods:**
 - `StartAsync()`: Start the server and begin listening for connections
 - `StopAsync()`: Stop the server and close all connections
 
 ### Tool Registration
 
-#### Manual Registration
+**Manual Registration:**
 ```csharp
 server.Tools.RegisterTool("tool/name", async (parameters) =>
 {
@@ -141,7 +115,7 @@ server.Tools.RegisterTool("tool/name", async (parameters) =>
 });
 ```
 
-#### Attribute-Based Registration
+**Attribute-Based Registration:**
 ```csharp
 [Tool("tool/name", Description = "Tool description")]
 public async Task<object> MyTool(
@@ -152,7 +126,7 @@ public async Task<object> MyTool(
 }
 ```
 
-#### Assembly Scanning
+**Assembly Scanning:**
 ```csharp
 server.Tools.RegisterToolsFromAssembly(Assembly.GetExecutingAssembly());
 server.Tools.RegisterToolsFromInstance(new MyToolsClass());
@@ -171,16 +145,6 @@ await server.Events.EmitEventAsync("channel/name", eventData);
 var channels = server.Events.GetAvailableChannels();
 ```
 
-### Server Configuration
-
-```csharp
-// Use external configuration from GABS
-var server = Gabp.CreateServer()
-    .UseAppInfo("My Game", "2.0.0")    // App information
-    .UseExternalConfig(port, token, gameId)  // From external bridge
-    .Build();
-```
-
 ## Protocol Compliance
 
 Lib.GAB implements GABP 1.0 specification including:
@@ -191,24 +155,6 @@ Lib.GAB implements GABP 1.0 specification including:
 - **Core Methods**: session/hello, tools/list, tools/call, events/subscribe
 - **Error Handling**: Standard JSON-RPC error codes
 - **Capability Negotiation**: Advertising available tools and events
-
-## Bridge Connection
-
-**Important**: Starting with this version, the library **no longer automatically creates configuration files**. This allows external bridge management tools like [GABS](https://github.com/pardeike/GABS) to handle configuration properly.
-
-### For Mod Developers
-
-If you're developing a mod that should work with GABS, use the external configuration API:
-
-```csharp
-// Read from GABS bridge file or environment variables
-int port = ReadFromGabsBridge();
-string token = ReadTokenFromGabsBridge(); 
-string gameId = ReadGameIdFromGabsBridge();
-
-var server = Gabp.CreateServerWithExternalConfig("My Mod", "1.0.0", port, token, gameId);
-await server.StartAsync();
-```
 
 ## Example
 
@@ -221,14 +167,10 @@ See `Lib.GAB.Example` for a complete working example showing:
 ## Requirements
 
 - **.NET Standard 2.0** compatible runtime:
-  - .NET Framework 4.7.2 or later (for RimWorld mods, Unity applications)
+  - .NET Framework 4.7.2 or later
   - .NET Core 2.0 or later
   - .NET 5.0 or later
 - Windows, macOS, or Linux
-
-## RimWorld Mod Compatibility
-
-This library is specifically designed to work with **RimWorld mods** running on **.NET Framework 4.7.2** and Unity. The library targets .NET Standard 2.0 to ensure maximum compatibility with Unity and older .NET Framework versions.
 
 ## License
 
