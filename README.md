@@ -75,6 +75,74 @@ var token = Environment.GetEnvironmentVariable("GABP_TOKEN");
 var server = Gabp.CreateServerWithExternalConfig("My Game", "1.0.0", port, token, gameId);
 ```
 
+### Practical Usage Example
+
+Here's how to use Lib.GAB in a game mod that should work both standalone and with GABS:
+
+```csharp
+using System;
+using System.Threading.Tasks;
+using Lib.GAB;
+using Lib.GAB.Tools;
+
+public class GameMod
+{
+    private GabpServer _server;
+
+    public async Task InitializeAsync()
+    {
+        // Create server that automatically adapts to the environment
+        _server = Gabp.CreateGabsAwareServerWithInstance("My Game Mod", "1.0.0", this);
+        
+        // Register event channels
+        _server.Events.RegisterChannel("player/move", "Player movement events");
+        _server.Events.RegisterChannel("game/status", "Game status updates");
+        
+        await _server.StartAsync();
+        
+        if (Gabp.IsRunningUnderGabs())
+        {
+            Console.WriteLine($"Game mod connected to GABS on port {_server.Port}");
+        }
+        else
+        {
+            Console.WriteLine($"Game mod running standalone on port {_server.Port}");
+            Console.WriteLine($"Bridge token: {_server.Token}");
+        }
+    }
+
+    [Tool("player/teleport", Description = "Teleport player to coordinates")]
+    public async Task<object> TeleportPlayer(
+        [ToolParameter(Description = "Player name")] string player,
+        [ToolParameter(Description = "X coordinate")] double x,
+        [ToolParameter(Description = "Y coordinate")] double y,
+        [ToolParameter(Description = "Z coordinate")] double z)
+    {
+        // Your game-specific teleport logic here
+        await Game.TeleportPlayerAsync(player, x, y, z);
+        
+        // Notify about the teleport
+        await _server.Events.EmitEventAsync("player/move", new
+        {
+            player,
+            position = new { x, y, z },
+            reason = "teleport"
+        });
+        
+        return new { success = true, player, position = new { x, y, z } };
+    }
+
+    public async Task ShutdownAsync()
+    {
+        if (_server != null)
+        {
+            await _server.StopAsync();
+            _server.Dispose();
+        }
+    }
+}
+```
+
 ## Quick Start
 
 For applications that manage their own configuration:
