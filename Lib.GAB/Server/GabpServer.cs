@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -38,11 +37,6 @@ namespace Lib.GAB.Server
         /// Application information
         /// </summary>
         public AppInfo AppInfo { get; set; } = new AppInfo { Name = "GABP Server", Version = "1.0.0" };
-
-        /// <summary>
-        /// Whether to write configuration file for bridges to connect
-        /// </summary>
-        public bool WriteConfigFile { get; set; } = false;
     }
 
     /// <summary>
@@ -104,11 +98,6 @@ namespace Lib.GAB.Server
         public async Task StartAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
             await _transport.StartAsync(cancellationToken);
-            
-            if (_config.WriteConfigFile)
-            {
-                await WriteConfigFileAsync();
-            }
         }
 
         /// <summary>
@@ -415,64 +404,6 @@ namespace Lib.GAB.Server
         {
             _eventManager.RegisterChannel("system/status", "System status events");
             _eventManager.RegisterChannel("system/log", "System log events");
-        }
-
-        private async Task WriteConfigFileAsync()
-        {
-            var configDir = GetConfigDirectory();
-            Directory.CreateDirectory(configDir);
-            
-            var configPath = Path.Combine(configDir, "bridge.json");
-            
-            var config = new
-            {
-                token = _config.Token,
-                transport = new
-                {
-                    type = "tcp",
-                    address = Port.ToString()
-                },
-                metadata = new
-                {
-                    pid = GetCurrentProcessId(),
-                    startTime = DateTimeOffset.UtcNow.ToString("O"),
-                    launchId = Guid.NewGuid().ToString()
-                }
-            };
-
-            var json = JsonConvert.SerializeObject(config, Formatting.Indented);
-
-            await WriteAllTextAsync(configPath, json);
-        }
-
-        private static int GetCurrentProcessId()
-        {
-            return System.Diagnostics.Process.GetCurrentProcess().Id;
-        }
-
-        private static async Task WriteAllTextAsync(string path, string content)
-        {
-            using (var writer = new StreamWriter(path))
-            {
-                await writer.WriteAsync(content);
-            }
-        }
-
-        private static string GetConfigDirectory()
-        {
-            var platform = Environment.OSVersion.Platform;
-            if (platform == PlatformID.Win32NT)
-            {
-                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "gabp");
-            }
-            else if (platform == PlatformID.Unix && RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "gabp");
-            }
-            else
-            {
-                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "gabp");
-            }
         }
 
         public void Dispose()
