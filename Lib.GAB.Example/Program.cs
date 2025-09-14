@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Lib.GAB;
 using Lib.GAB.Tools;
+using Lib.GAB.Server;
 
 // Example game/application tools
 public class GameTools
@@ -48,14 +49,27 @@ public class GameTools
     }
 }
 
-// Example program showing how to use Lib.GAB
 class Program
 {
     static async Task Main(string[] args)
     {
         Console.WriteLine("Starting GABP Server Example...");
 
-        // Create server with tools from a class instance
+        // Example 1: Traditional server creation (no config file written by default now)
+        Console.WriteLine("\nExample 1: Traditional server (no external config)");
+        await RunTraditionalExample();
+
+        Console.WriteLine("\nPress Enter to continue to Example 2...");
+        Console.ReadLine();
+
+        // Example 2: Server with external configuration (simulating GABS bridge usage)
+        Console.WriteLine("\nExample 2: Server with external configuration");
+        await RunExternalConfigExample();
+    }
+
+    static async Task RunTraditionalExample()
+    {
+        // Create server with tools from a class instance (traditional way)
         var gameTools = new GameTools();
         var server = Gabp.CreateServerWithInstance("Example Game", "1.0.0", gameTools, port: 0);
 
@@ -74,65 +88,13 @@ class Program
 
         try
         {
-            // Start the server
             await server.StartAsync();
             
-            Console.WriteLine($"GABP Server started on port {server.Port}");
+            Console.WriteLine($"Traditional GABP Server started on port {server.Port}");
             Console.WriteLine($"Authentication token: {server.Token}");
-            Console.WriteLine();
+            Console.WriteLine("NOTE: No bridge config file is written by default now.");
             
-            // Show available tools
-            var tools = server.Tools.GetTools();
-            Console.WriteLine($"Available tools ({tools.Count}):");
-            foreach (var tool in tools)
-            {
-                Console.WriteLine($"  - {tool.Name}: {tool.Description ?? "No description"}");
-                if (tool.Parameters.Count > 0)
-                {
-                    Console.WriteLine($"    Parameters: {string.Join(", ", tool.Parameters.Select(p => p.Name))}");
-                }
-            }
-            Console.WriteLine();
-
-            // Show available event channels
-            var channels = server.Events.GetAvailableChannels();
-            Console.WriteLine($"Available event channels ({channels.Count}):");
-            foreach (var channel in channels)
-            {
-                Console.WriteLine($"  - {channel}");
-            }
-            Console.WriteLine();
-
-            // Simulate some events
-            Console.WriteLine("Simulating events...");
-            _ = Task.Run(async () =>
-            {
-                var random = new Random();
-                while (true)
-                {
-                    await Task.Delay(5000);
-                    
-                    // Emit a player move event
-                    await server.Events.EmitEventAsync("player/move", new
-                    {
-                        playerId = "player1",
-                        position = new
-                        {
-                            x = random.Next(-100, 100),
-                            y = 64,
-                            z = random.Next(-100, 100)
-                        }
-                    });
-
-                    // Emit a game status event
-                    await server.Events.EmitEventAsync("game/status", new
-                    {
-                        status = "running",
-                        playerCount = 1,
-                        timestamp = DateTimeOffset.UtcNow
-                    });
-                }
-            });
+            ShowServerInfo(server);
 
             Console.WriteLine("Server is running. Press any key to stop...");
             Console.ReadKey();
@@ -141,7 +103,79 @@ class Program
         {
             await server.StopAsync();
             server.Dispose();
-            Console.WriteLine("Server stopped.");
+            Console.WriteLine("Traditional server stopped.");
         }
+    }
+
+    static async Task RunExternalConfigExample()
+    {
+        // Simulate reading configuration from GABS bridge file or environment variables
+        var externalPort = 12345;
+        var externalToken = "external-token-from-gabs";
+        var gameId = "example-game-mod";
+
+        Console.WriteLine($"Simulating external config: port={externalPort}, token={externalToken}, gameId={gameId}");
+
+        // Create server with external configuration
+        var gameTools = new GameTools();
+        var server = Gabp.CreateServerWithInstanceAndExternalConfig(
+            "Example Game", "1.0.0", gameTools, externalPort, externalToken, gameId);
+
+        // Register event channels
+        server.Events.RegisterChannel("player/move", "Player movement events");
+        server.Events.RegisterChannel("world/block_change", "World block change events");
+        server.Events.RegisterChannel("game/status", "Game status events");
+
+        // Register a custom tool manually
+        server.Tools.RegisterTool("game/status", _ => Task.FromResult<object?>(new
+        {
+            status = "running",
+            players = 1,
+            uptime = TimeSpan.FromMinutes(5).ToString()
+        }));
+
+        try
+        {
+            await server.StartAsync();
+            
+            Console.WriteLine($"External Config GABP Server started on port {server.Port}");
+            Console.WriteLine($"Authentication token: {server.Token}");
+            Console.WriteLine("NOTE: Using external configuration from GABS bridge.");
+            
+            ShowServerInfo(server);
+
+            Console.WriteLine("Server is running. Press any key to stop...");
+            Console.ReadKey();
+        }
+        finally
+        {
+            await server.StopAsync();
+            server.Dispose();
+            Console.WriteLine("External config server stopped.");
+        }
+    }
+
+    static void ShowServerInfo(GabpServer server)
+    {
+        // Show available tools
+        var tools = server.Tools.GetTools();
+        Console.WriteLine($"\nAvailable tools ({tools.Count}):");
+        foreach (var tool in tools)
+        {
+            Console.WriteLine($"  - {tool.Name}: {tool.Description ?? "No description"}");
+            if (tool.Parameters.Count > 0)
+            {
+                Console.WriteLine($"    Parameters: {string.Join(", ", tool.Parameters.Select(p => p.Name))}");
+            }
+        }
+
+        // Show available event channels
+        var channels = server.Events.GetAvailableChannels();
+        Console.WriteLine($"\nAvailable event channels ({channels.Count}):");
+        foreach (var channel in channels)
+        {
+            Console.WriteLine($"  - {channel}");
+        }
+        Console.WriteLine();
     }
 }

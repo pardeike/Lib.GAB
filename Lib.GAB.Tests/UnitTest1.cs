@@ -90,6 +90,59 @@ public class GabpServerTests
         var channels = server.Events.GetAvailableChannels();
         Assert.Contains("test/events", channels);
     }
+
+    [Fact]
+    public void CanCreateServerWithExternalConfig()
+    {
+        // Arrange & Act
+        var server = Gabp.CreateServerWithExternalConfig("Test App", "1.0.0", 12345, "test-token");
+
+        // Assert
+        Assert.NotNull(server);
+        Assert.Equal("test-token", server.Token);
+    }
+
+    [Fact] 
+    public void CanCreateServerWithExternalConfigAndGameId()
+    {
+        // Arrange & Act
+        var server = Gabp.CreateServerWithExternalConfig("Test App", "1.0.0", 12346, "test-token-2", "my-game");
+
+        // Assert
+        Assert.NotNull(server);
+        Assert.Equal("test-token-2", server.Token);
+        // Note: AgentId is internal to the server configuration, validated through server behavior
+    }
+
+    [Fact]
+    public void CanCreateServerWithInstanceAndExternalConfig()
+    {
+        // Arrange
+        var testInstance = new TestToolsClass();
+
+        // Act
+        var server = Gabp.CreateServerWithInstanceAndExternalConfig("Test App", "1.0.0", testInstance, 12347, "test-token-3");
+
+        // Assert
+        Assert.NotNull(server);
+        Assert.Equal("test-token-3", server.Token);
+        Assert.True(server.Tools.HasTool("math/add"));
+        Assert.True(server.Tools.HasTool("string/upper"));
+    }
+
+    [Fact]
+    public void ExternalConfigAPIExists()
+    {
+        // Arrange & Act - Verify the builder API exists
+        var server = Gabp.CreateServer()
+            .UseAppInfo("Test App", "1.0.0")
+            .UseExternalConfig(12348, "test-token-4")
+            .Build();
+
+        // Assert
+        Assert.NotNull(server);
+        Assert.Equal("test-token-4", server.Token);
+    }
 }
 
 public class TestToolsClass
