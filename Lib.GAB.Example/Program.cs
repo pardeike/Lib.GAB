@@ -107,8 +107,18 @@ class Program
             
             ShowServerInfo(server);
 
-            Console.WriteLine("Server is running. Press any key to stop...");
-            Console.ReadKey();
+            if (Console.IsInputRedirected || Console.IsOutputRedirected)
+            {
+                // Running under GABS or other automation - run for 30 seconds to allow testing
+                Console.WriteLine("Running under automation - server will run for 30 seconds for testing...");
+                await Task.Delay(30000);
+            }
+            else
+            {
+                // Interactive mode
+                Console.WriteLine("Server is running. Press any key to stop...");
+                Console.ReadKey();
+            }
         }
         finally
         {
