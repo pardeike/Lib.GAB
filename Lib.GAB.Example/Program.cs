@@ -55,16 +55,77 @@ class Program
     {
         Console.WriteLine("Starting GABP Server Example...");
 
-        // Example 1: Traditional server creation (no config file written by default now)
-        Console.WriteLine("\nExample 1: Traditional server (no external config)");
-        await RunTraditionalExample();
+        // Check if we're running under GABS
+        if (Gabp.IsRunningUnderGabs())
+        {
+            Console.WriteLine("\nRunning under GABS - using GABS-aware configuration");
+            await RunGabsAwareExample();
+        }
+        else
+        {
+            Console.WriteLine("\nNot running under GABS - demonstrating traditional and external config modes");
+            
+            // Example 1: Traditional server creation (no config file written by default now)
+            Console.WriteLine("\nExample 1: Traditional server (no external config)");
+            await RunTraditionalExample();
 
-        Console.WriteLine("\nPress Enter to continue to Example 2...");
-        Console.ReadLine();
+            Console.WriteLine("\nPress Enter to continue to Example 2...");
+            Console.ReadLine();
 
-        // Example 2: Server with external configuration (simulating GABS bridge usage)
-        Console.WriteLine("\nExample 2: Server with external configuration");
-        await RunExternalConfigExample();
+            // Example 2: Server with external configuration (simulating GABS bridge usage)
+            Console.WriteLine("\nExample 2: Server with external configuration");
+            await RunExternalConfigExample();
+        }
+    }
+
+    static async Task RunGabsAwareExample()
+    {
+        // Create server with automatic GABS environment detection
+        var gameTools = new GameTools();
+        var server = Gabp.CreateGabsAwareServerWithInstance("Example Game", "1.0.0", gameTools);
+
+        // Register some event channels
+        server.Events.RegisterChannel("player/move", "Player movement events");
+        server.Events.RegisterChannel("world/block_change", "World block change events");
+        server.Events.RegisterChannel("game/status", "Game status events");
+
+        // Register a custom tool manually
+        server.Tools.RegisterTool("game/status", _ => Task.FromResult<object?>(new
+        {
+            status = "running",
+            players = 1,
+            uptime = TimeSpan.FromMinutes(5).ToString()
+        }));
+
+        try
+        {
+            await server.StartAsync();
+            
+            Console.WriteLine($"GABS-aware GABP Server started on port {server.Port}");
+            Console.WriteLine($"Authentication token: {server.Token}");
+            Console.WriteLine("NOTE: Configuration automatically detected from GABS environment variables.");
+            
+            ShowServerInfo(server);
+
+            if (Console.IsInputRedirected || Console.IsOutputRedirected)
+            {
+                // Running under GABS or other automation - run for 30 seconds to allow testing
+                Console.WriteLine("Running under automation - server will run for 30 seconds for testing...");
+                await Task.Delay(30000);
+            }
+            else
+            {
+                // Interactive mode
+                Console.WriteLine("Server is running. Press any key to stop...");
+                Console.ReadKey();
+            }
+        }
+        finally
+        {
+            await server.StopAsync();
+            server.Dispose();
+            Console.WriteLine("GABS-aware server stopped.");
+        }
     }
 
     static async Task RunTraditionalExample()
