@@ -26,9 +26,45 @@ namespace Lib.GAB.Tools
         public List<ToolParameterInfo> Parameters { get; set; } = new List<ToolParameterInfo>();
 
         /// <summary>
+        /// Response field documentation
+        /// </summary>
+        public List<ToolResponseFieldInfo> ResponseFields { get; set; } = new List<ToolResponseFieldInfo>();
+
+        /// <summary>
         /// Whether authentication is required
         /// </summary>
         public bool RequiresAuth { get; set; } = true;
+    }
+
+    /// <summary>
+    /// Information about a field in the tool response
+    /// </summary>
+    public class ToolResponseFieldInfo
+    {
+        /// <summary>
+        /// Field name in the JSON response
+        /// </summary>
+        public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// JSON Schema type (string, boolean, integer, number, object, array)
+        /// </summary>
+        public string Type { get; set; } = "string";
+
+        /// <summary>
+        /// Human-readable description
+        /// </summary>
+        public string Description { get; set; }
+
+        /// <summary>
+        /// Whether this field is always present
+        /// </summary>
+        public bool Always { get; set; } = true;
+
+        /// <summary>
+        /// Whether this field can be null
+        /// </summary>
+        public bool Nullable { get; set; } = false;
     }
 
     /// <summary>

@@ -260,10 +260,46 @@ namespace Lib.GAB.Server
                     required = p.Required,
                     defaultValue = p.DefaultValue
                 }).ToList(),
+                outputSchema = t.ResponseFields.Count > 0 ? BuildOutputSchema(t.ResponseFields) : null,
                 requiresAuth = t.RequiresAuth
             }).ToList();
 
             await SendResponseAsync(connection, request.Id, new { tools });
+        }
+
+        private static Dictionary<string, object> BuildOutputSchema(List<ToolResponseFieldInfo> fields)
+        {
+            var properties = new Dictionary<string, object>();
+            var required = new List<string>();
+
+            foreach (var f in fields)
+            {
+                var prop = new Dictionary<string, object>();
+
+                if (f.Nullable)
+                    prop["type"] = new[] { f.Type, "null" };
+                else
+                    prop["type"] = f.Type;
+
+                if (!string.IsNullOrEmpty(f.Description))
+                    prop["description"] = f.Description;
+
+                properties[f.Name] = prop;
+
+                if (f.Always)
+                    required.Add(f.Name);
+            }
+
+            var schema = new Dictionary<string, object>
+            {
+                ["type"] = "object",
+                ["properties"] = properties
+            };
+
+            if (required.Count > 0)
+                schema["required"] = required;
+
+            return schema;
         }
 
         private async Task HandleToolsCallAsync(IConnection connection, GabpRequest request)
@@ -297,7 +333,9 @@ namespace Lib.GAB.Server
                 }
 
                 object arguments = null;
-                callParams.TryGetValue("arguments", out arguments);
+                // Try "parameters" first (GABS sends this), fall back to "arguments" for compatibility
+                if (!callParams.TryGetValue("parameters", out arguments))
+                    callParams.TryGetValue("arguments", out arguments);
                 var result = await _toolRegistry.CallToolAsync(toolName, arguments);
                 
                 await SendResponseAsync(connection, request.Id, result);

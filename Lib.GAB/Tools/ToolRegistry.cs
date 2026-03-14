@@ -77,7 +77,8 @@ namespace Lib.GAB.Tools
                     Name = toolAttr.Name,
                     Description = toolAttr.Description,
                     RequiresAuth = toolAttr.RequiresAuth,
-                    Parameters = GetParameterInfo(method)
+                    Parameters = GetParameterInfo(method),
+                    ResponseFields = GetResponseFieldInfo(method)
                 };
 
                 RegisterTool(toolAttr.Name, CreateHandler(method, instance), toolInfo);
@@ -103,6 +104,23 @@ namespace Lib.GAB.Tools
             }
             
             return parameters;
+        }
+
+        private List<ToolResponseFieldInfo> GetResponseFieldInfo(MethodInfo method)
+        {
+            var fields = new List<ToolResponseFieldInfo>();
+            foreach (var attr in method.GetCustomAttributes<ToolResponseAttribute>())
+            {
+                fields.Add(new ToolResponseFieldInfo
+                {
+                    Name = attr.Name,
+                    Type = attr.Type,
+                    Description = attr.Description,
+                    Always = attr.Always,
+                    Nullable = attr.Nullable
+                });
+            }
+            return fields;
         }
 
         private Func<object, Task<object>> CreateHandler(MethodInfo method, object instance)

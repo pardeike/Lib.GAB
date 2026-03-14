@@ -53,4 +53,45 @@ namespace Lib.GAB.Tools
         /// </summary>
         public object DefaultValue { get; set; }
     }
+
+    /// <summary>
+    /// Attribute to document a field in the tool's response object.
+    /// Apply multiple times to a method to document each response field.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
+    public class ToolResponseAttribute : Attribute
+    {
+        /// <summary>
+        /// Field name in the JSON response (e.g. "success", "screenType")
+        /// </summary>
+        public string Name { get; }
+
+        /// <summary>
+        /// JSON Schema type: "boolean", "string", "integer", "number", "object", "array"
+        /// </summary>
+        public string Type { get; set; } = "string";
+
+        /// <summary>
+        /// Human-readable description of this field
+        /// </summary>
+        public string Description { get; set; }
+
+        /// <summary>
+        /// Whether this field is always present in the response (default true)
+        /// </summary>
+        public bool Always { get; set; } = true;
+
+        /// <summary>
+        /// Whether this field can be null
+        /// </summary>
+        public bool Nullable { get; set; } = false;
+
+        public ToolResponseAttribute(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("Response field name cannot be null or empty", nameof(name));
+
+            Name = name;
+        }
+    }
 }
