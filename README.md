@@ -4,15 +4,17 @@ A .NET library implementing the GABP (Game Agent Bridge Protocol) server for AI-
 
 ## Overview
 
-Lib.GAB provides a complete GABP-compliant server implementation that allows applications to expose functionality to AI agents and automation tools. The library handles all the protocol details while providing a simple API for registering tools and emitting events.
+Lib.GAB provides the higher-level server ergonomics for hosting a GABP endpoint inside a game or application. It builds on the shared `Gabp.Runtime` wire-model package for canonical protocol constants and message contracts, while keeping the integration surface simple: register tools, register event channels, and start the server.
 
 ## Features
 
 - **GABP 1.0 Compliant**: Full implementation of the GABP specification
 - **TCP Transport**: Listens on 127.0.0.1 with flexible port configuration
 - **Tool Registration**: Manual and attribute-based tool registration
+- **Schema-Aware Tool Metadata**: `tools/list` emits canonical `title`, `inputSchema`, and `outputSchema` descriptors
 - **Event System**: Real-time event broadcasting to connected bridges
 - **Session Management**: Token-based authentication and capability negotiation
+- **Shared Runtime Types**: Reuses `Gabp.Runtime` for protocol constants and request models
 - **Easy Integration**: Simple API for quick setup and customization
 - **Wide Compatibility**: Targets .NET Standard 2.0
 
@@ -179,12 +181,16 @@ using Lib.GAB.Tools;
 public class ApplicationTools
 {
     [Tool("data/get", Description = "Get application data")]
+    [ToolResponse("dataId", Type = "string", Description = "Requested data identifier")]
+    [ToolResponse("value", Type = "string", Description = "Resolved value")]
     public object GetData([ToolParameter(Description = "Data ID")] string dataId)
     {
         return new { dataId, value = GetDataValue(dataId) };
     }
 
     [Tool("action/execute", Description = "Execute an action")]
+    [ToolResponse("success", Type = "boolean", Description = "True when the action completed successfully")]
+    [ToolResponse("actionType", Type = "string", Description = "Action that was executed")]
     public async Task<object> ExecuteAction(
         [ToolParameter(Description = "Action type")] string actionType,
         [ToolParameter(Description = "Parameters")] string parameters)
@@ -198,6 +204,26 @@ public class ApplicationTools
 var appTools = new ApplicationTools();
 var server = Gabp.CreateServerWithInstance("My Application", "1.0.0", appTools);
 await server.StartAsync();
+```
+
+### Documenting Tool Responses
+
+If you annotate a tool with `[ToolResponse]`, Lib.GAB includes an `outputSchema` in `tools/list`. That makes downstream bridges such as GABS surface richer tool metadata to AI clients.
+
+```csharp
+[Tool("screen/capture", Description = "Capture the current screen state")]
+[ToolResponse("success", Type = "boolean", Description = "Whether capture succeeded")]
+[ToolResponse("screenType", Type = "string", Description = "High-level UI screen name")]
+[ToolResponse("message", Type = "string", Description = "Optional detail", Always = false, Nullable = true)]
+public object CaptureScreen()
+{
+    return new
+    {
+        success = true,
+        screenType = "main_menu",
+        message = (string)null
+    };
+}
 ```
 
 ## Event Broadcasting
@@ -279,8 +305,8 @@ Lib.GAB implements GABP 1.0 specification including:
 - **Message Format**: JSON-RPC-inspired request/response/event messages
 - **Transport**: LSP-style framing over TCP connections
 - **Authentication**: Token-based authentication with config file
-- **Core Methods**: session/hello, tools/list, tools/call, events/subscribe
-- **Error Handling**: Standard JSON-RPC error codes
+- **Core Methods**: `session/hello`, `tools/list`, `tools/call`, `events/subscribe`, `events/unsubscribe`
+- **Error Handling**: Standard GABP error codes
 - **Capability Negotiation**: Advertising available tools and events
 
 ## Example
