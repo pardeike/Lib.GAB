@@ -196,7 +196,7 @@ namespace Lib.GAB.Transport
                 var startIndex = contentLengthIndex + "Content-Length:".Length;
                 var endIndex = headerText.IndexOf('\r', startIndex);
                 if (endIndex == -1) endIndex = headerText.IndexOf('\n', startIndex);
-                if (endIndex == -1) break;
+                if (endIndex == -1) endIndex = headerText.Length;
 
                 var contentLengthStr = headerText.Substring(startIndex, endIndex - startIndex).Trim();
                 if (!int.TryParse(contentLengthStr, out var contentLength)) break;

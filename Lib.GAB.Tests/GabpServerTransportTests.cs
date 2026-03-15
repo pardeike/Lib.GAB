@@ -201,11 +201,55 @@ public class GabpServerTransportTests
         }
     }
 
-    private static async Task SendFrameAsync(NetworkStream stream, object payload)
+    [Fact]
+    public async Task SessionHelloAcceptsSingleContentLengthHeader()
+    {
+        using var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new TransportTestTools());
+
+        await server.StartAsync();
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", server.Port);
+            using var stream = client.GetStream();
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440040",
+                type = "request",
+                method = "session/hello",
+                @params = new
+                {
+                    token = server.Token,
+                    bridgeVersion = "1.0.0",
+                    platform = "linux",
+                    launchId = "550e8400-e29b-41d4-a716-446655440041"
+                }
+            }, includeContentType: false);
+
+            var welcome = await ReadFrameAsync(stream);
+            using var welcomeDoc = JsonDocument.Parse(welcome);
+            Assert.Equal("response", welcomeDoc.RootElement.GetProperty("type").GetString());
+            Assert.True(welcomeDoc.RootElement.TryGetProperty("result", out var welcomeResult));
+            Assert.Equal("1.0", welcomeResult.GetProperty("schemaVersion").GetString());
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    private static async Task SendFrameAsync(NetworkStream stream, object payload, bool includeContentType = true)
     {
         var json = JsonSerializer.Serialize(payload);
         var body = Encoding.UTF8.GetBytes(json);
-        var header = Encoding.ASCII.GetBytes($"Content-Length: {body.Length}\r\nContent-Type: application/json\r\n\r\n");
+        var headerText = includeContentType
+            ? $"Content-Length: {body.Length}\r\nContent-Type: application/json\r\n\r\n"
+            : $"Content-Length: {body.Length}\r\n\r\n";
+        var header = Encoding.ASCII.GetBytes(headerText);
 
         await stream.WriteAsync(header, 0, header.Length);
         await stream.WriteAsync(body, 0, body.Length);

@@ -451,9 +451,9 @@ namespace Lib.GAB.Server
                 {
                     arguments = parametersToken;
                 }
-                else if (callParams.Arguments.HasValue)
+                else if (callParams.Arguments != null)
                 {
-                    arguments = JToken.Parse(callParams.Arguments.Value.GetRawText());
+                    arguments = callParams.Arguments;
                 }
 
                 var result = await _toolRegistry.CallToolAsync(toolName, arguments);
