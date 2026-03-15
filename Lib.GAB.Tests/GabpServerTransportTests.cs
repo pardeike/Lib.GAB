@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -42,7 +43,12 @@ public class GabpServerTransportTests
             var welcome = await ReadFrameAsync(stream);
             using var welcomeDoc = JsonDocument.Parse(welcome);
             Assert.Equal("response", welcomeDoc.RootElement.GetProperty("type").GetString());
-            Assert.True(welcomeDoc.RootElement.TryGetProperty("result", out _));
+            Assert.True(welcomeDoc.RootElement.TryGetProperty("result", out var welcomeResult));
+
+            var capabilities = welcomeResult.GetProperty("capabilities");
+            Assert.True(capabilities.TryGetProperty("methods", out var methods));
+            Assert.Contains("math/add", methods.EnumerateArray().Select(entry => entry.GetString()));
+            Assert.False(capabilities.TryGetProperty("tools", out _));
 
             await SendFrameAsync(stream, new
             {
@@ -65,6 +71,51 @@ public class GabpServerTransportTests
             using var responseDoc = JsonDocument.Parse(response);
             Assert.Equal("response", responseDoc.RootElement.GetProperty("type").GetString());
             Assert.Equal(8, responseDoc.RootElement.GetProperty("result").GetInt32());
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task SessionHelloReturnsCanonicalMethodsCapabilities()
+    {
+        using var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new TransportTestTools());
+
+        await server.StartAsync();
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", server.Port);
+            using var stream = client.GetStream();
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440020",
+                type = "request",
+                method = "session/hello",
+                @params = new
+                {
+                    token = server.Token,
+                    bridgeVersion = "1.0.0",
+                    platform = "linux",
+                    launchId = "550e8400-e29b-41d4-a716-446655440021"
+                }
+            });
+
+            var welcome = await ReadFrameAsync(stream);
+            using var welcomeDoc = JsonDocument.Parse(welcome);
+            var result = welcomeDoc.RootElement.GetProperty("result");
+            var capabilities = result.GetProperty("capabilities");
+
+            Assert.Equal("1.0", result.GetProperty("schemaVersion").GetString());
+            Assert.True(capabilities.TryGetProperty("methods", out var methods));
+            Assert.Contains("math/add", methods.EnumerateArray().Select(entry => entry.GetString()));
+            Assert.False(capabilities.TryGetProperty("tools", out _));
         }
         finally
         {

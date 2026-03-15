@@ -226,17 +226,21 @@ namespace Lib.GAB.Server
                 session.LaunchId = helloParams.LaunchId;
 
                 // Send welcome response
-                var welcomeResult = new SessionWelcomeResult
+                var welcomeResult = new GabpRuntime.SessionWelcomeResult
                 {
                     AgentId = _config.AgentId,
-                    App = _config.AppInfo,
-                    Capabilities = new Capabilities
+                    App = new GabpRuntime.GabpAppInfo
                     {
-                        Tools = _toolRegistry.GetTools().Select(t => t.Name).ToList(),
+                        Name = _config.AppInfo.Name,
+                        Version = _config.AppInfo.Version
+                    },
+                    Capabilities = new GabpRuntime.GabpCapabilities
+                    {
+                        Methods = _toolRegistry.GetTools().Select(t => t.Name).ToList(),
                         Events = _eventManager.GetAvailableChannels(),
                         Resources = new List<string>() // TODO: Add resource support
                     },
-                    SchemaVersion = "1.0"
+                    SchemaVersion = GabpRuntime.RuntimeMetadata.TargetGabpSchemaVersion
                 };
 
                 await SendResponseAsync(connection, request.Id, welcomeResult);
