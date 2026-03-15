@@ -6,10 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\gabp-runtime\dotnet\Gabp.Runtime\Gabp.Runtime.csproj" />
+    <PackageReference Include="Gabp.Runtime" Version="0.1.0-alpha.1" />
   </ItemGroup>
 
 </Project>

@@ -19,6 +19,9 @@ bld/
 # Visual Studio Code
 .vscode/
 
+# macOS Finder metadata
+.DS_Store
+
 # MSTest test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
