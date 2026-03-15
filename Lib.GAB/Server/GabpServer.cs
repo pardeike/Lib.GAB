@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -257,7 +258,9 @@ namespace Lib.GAB.Server
             var tools = _toolRegistry.GetTools().Select(t => new
             {
                 name = t.Name,
+                title = string.IsNullOrWhiteSpace(t.Title) ? BuildToolTitle(t.Name) : t.Title,
                 description = t.Description,
+                inputSchema = BuildInputSchema(t.Parameters),
                 parameters = t.Parameters.Select(p => new
                 {
                     name = p.Name,
@@ -266,15 +269,65 @@ namespace Lib.GAB.Server
                     required = p.Required,
                     defaultValue = p.DefaultValue
                 }).ToList(),
-                outputSchema = t.ResponseFields.Count > 0 ? BuildOutputSchema(t.ResponseFields) : null,
+                outputSchema = BuildOutputSchema(t.ResponseFields),
                 requiresAuth = t.RequiresAuth
             }).ToList();
 
             await SendResponseAsync(connection, request.Id, new { tools });
         }
 
+        private static Dictionary<string, object> BuildInputSchema(List<ToolParameterInfo> parameters)
+        {
+            var properties = new Dictionary<string, object>();
+            var required = new List<string>();
+
+            foreach (var parameter in parameters)
+            {
+                var property = new Dictionary<string, object>
+                {
+                    ["type"] = MapTypeToJsonSchemaType(parameter.Type)
+                };
+
+                if (!string.IsNullOrWhiteSpace(parameter.Description))
+                {
+                    property["description"] = parameter.Description;
+                }
+
+                if (parameter.DefaultValue != null)
+                {
+                    property["default"] = parameter.DefaultValue;
+                }
+
+                properties[parameter.Name] = property;
+
+                if (parameter.Required)
+                {
+                    required.Add(parameter.Name);
+                }
+            }
+
+            var schema = new Dictionary<string, object>
+            {
+                ["type"] = "object",
+                ["properties"] = properties,
+                ["additionalProperties"] = false
+            };
+
+            if (required.Count > 0)
+            {
+                schema["required"] = required;
+            }
+
+            return schema;
+        }
+
         private static Dictionary<string, object> BuildOutputSchema(List<ToolResponseFieldInfo> fields)
         {
+            if (fields.Count == 0)
+            {
+                return new Dictionary<string, object>();
+            }
+
             var properties = new Dictionary<string, object>();
             var required = new List<string>();
 
@@ -306,6 +359,57 @@ namespace Lib.GAB.Server
                 schema["required"] = required;
 
             return schema;
+        }
+
+        private static string BuildToolTitle(string toolName)
+        {
+            var parts = toolName
+                .Split(new[] { '/', '_', '-' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(part => CultureInfo.InvariantCulture.TextInfo.ToTitleCase(part))
+                .ToList();
+
+            return parts.Count == 0 ? toolName : string.Join(" ", parts);
+        }
+
+        private static string MapTypeToJsonSchemaType(Type type)
+        {
+            var targetType = Nullable.GetUnderlyingType(type) ?? type;
+
+            if (targetType == typeof(string) || targetType == typeof(char) || targetType == typeof(Guid))
+            {
+                return "string";
+            }
+
+            if (targetType == typeof(bool))
+            {
+                return "boolean";
+            }
+
+            if (targetType == typeof(byte) ||
+                targetType == typeof(sbyte) ||
+                targetType == typeof(short) ||
+                targetType == typeof(ushort) ||
+                targetType == typeof(int) ||
+                targetType == typeof(uint) ||
+                targetType == typeof(long) ||
+                targetType == typeof(ulong))
+            {
+                return "integer";
+            }
+
+            if (targetType == typeof(float) ||
+                targetType == typeof(double) ||
+                targetType == typeof(decimal))
+            {
+                return "number";
+            }
+
+            if (targetType != typeof(string) && typeof(System.Collections.IEnumerable).IsAssignableFrom(targetType))
+            {
+                return "array";
+            }
+
+            return "object";
         }
 
         private async Task HandleToolsCallAsync(IConnection connection, GabpRequest request)

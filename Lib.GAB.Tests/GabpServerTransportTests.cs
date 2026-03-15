@@ -123,6 +123,84 @@ public class GabpServerTransportTests
         }
     }
 
+    [Fact]
+    public async Task ToolsListEmitsCanonicalAndCompatibilitySchemas()
+    {
+        using var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new TransportTestTools());
+
+        await server.StartAsync();
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", server.Port);
+            using var stream = client.GetStream();
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440030",
+                type = "request",
+                method = "session/hello",
+                @params = new
+                {
+                    token = server.Token,
+                    bridgeVersion = "1.0.0",
+                    platform = "linux",
+                    launchId = "550e8400-e29b-41d4-a716-446655440031"
+                }
+            });
+
+            _ = await ReadFrameAsync(stream);
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440032",
+                type = "request",
+                method = "tools/list",
+                @params = new { }
+            });
+
+            var toolsList = await ReadFrameAsync(stream);
+            using var document = JsonDocument.Parse(toolsList);
+            var tool = document.RootElement
+                .GetProperty("result")
+                .GetProperty("tools")
+                .EnumerateArray()
+                .Single(entry => entry.GetProperty("name").GetString() == "math/add");
+
+            Assert.Equal("Add Numbers", tool.GetProperty("title").GetString());
+            Assert.Equal("Add two numbers", tool.GetProperty("description").GetString());
+
+            var inputSchema = tool.GetProperty("inputSchema");
+            Assert.Equal("object", inputSchema.GetProperty("type").GetString());
+            Assert.False(inputSchema.GetProperty("additionalProperties").GetBoolean());
+            Assert.True(inputSchema.TryGetProperty("properties", out var properties));
+            Assert.True(properties.TryGetProperty("a", out var paramA));
+            Assert.Equal("integer", paramA.GetProperty("type").GetString());
+            Assert.True(properties.TryGetProperty("b", out var paramB));
+            Assert.Equal("integer", paramB.GetProperty("type").GetString());
+
+            var required = inputSchema.GetProperty("required").EnumerateArray().Select(item => item.GetString()).ToArray();
+            Assert.Contains("a", required);
+            Assert.Contains("b", required);
+
+            Assert.True(tool.TryGetProperty("parameters", out var parameters));
+            Assert.Equal(2, parameters.GetArrayLength());
+
+            Assert.True(tool.TryGetProperty("outputSchema", out var outputSchema));
+            Assert.Equal(JsonValueKind.Object, outputSchema.ValueKind);
+            Assert.True(tool.TryGetProperty("requiresAuth", out var requiresAuth));
+            Assert.True(requiresAuth.GetBoolean());
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
     private static async Task SendFrameAsync(NetworkStream stream, object payload)
     {
         var json = JsonSerializer.Serialize(payload);
@@ -182,7 +260,7 @@ public class GabpServerTransportTests
 
     private sealed class TransportTestTools
     {
-        [Tool("math/add", Description = "Add two numbers")]
+        [Tool("math/add", Title = "Add Numbers", Description = "Add two numbers")]
         public int Add(
             [ToolParameter(Description = "First number")] int a,
             [ToolParameter(Description = "Second number")] int b)

@@ -19,6 +19,12 @@ namespace Lib.GAB.Tools
         public string Description { get; set; }
 
         /// <summary>
+        /// Human-readable title of the tool.
+        /// Falls back to a derived value from the tool name when omitted.
+        /// </summary>
+        public string Title { get; set; }
+
+        /// <summary>
         /// Whether this tool requires authentication
         /// </summary>
         public bool RequiresAuth { get; set; } = true;

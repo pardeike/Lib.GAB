@@ -75,6 +75,7 @@ namespace Lib.GAB.Tools
                 var toolInfo = new ToolInfo
                 {
                     Name = toolAttr.Name,
+                    Title = toolAttr.Title,
                     Description = toolAttr.Description,
                     RequiresAuth = toolAttr.RequiresAuth,
                     Parameters = GetParameterInfo(method),

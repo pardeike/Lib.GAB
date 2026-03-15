@@ -21,6 +21,11 @@ namespace Lib.GAB.Tools
         public string Description { get; set; }
 
         /// <summary>
+        /// Human-readable title
+        /// </summary>
+        public string Title { get; set; }
+
+        /// <summary>
         /// Parameter information
         /// </summary>
         public List<ToolParameterInfo> Parameters { get; set; } = new List<ToolParameterInfo>();
