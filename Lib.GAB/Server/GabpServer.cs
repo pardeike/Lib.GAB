@@ -6,10 +6,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Lib.GAB.Events;
 using Lib.GAB.Protocol;
 using Lib.GAB.Tools;
 using Lib.GAB.Transport;
+using GabpRuntime = Gabp.Runtime;
 
 namespace Lib.GAB.Server
 {
@@ -163,7 +165,7 @@ namespace Lib.GAB.Server
         private async Task HandleRequestAsync(IConnection connection, SessionInfo session, GabpRequest request)
         {
             // Handle session methods without authentication
-            if (request.Method == "session/hello")
+            if (request.Method == GabpRuntime.GabpProtocol.SessionHelloMethod)
             {
                 await HandleSessionHelloAsync(connection, session, request);
                 return;
@@ -180,11 +182,11 @@ namespace Lib.GAB.Server
             // Handle core methods
             switch (request.Method)
             {
-                case "tools/list":
+                case GabpRuntime.GabpProtocol.ToolsListMethod:
                     await HandleToolsListAsync(connection, request);
                     break;
                 
-                case "tools/call":
+                case GabpRuntime.GabpProtocol.ToolsCallMethod:
                     await HandleToolsCallAsync(connection, request);
                     break;
                 
@@ -207,7 +209,7 @@ namespace Lib.GAB.Server
         {
             try
             {
-                var helloParams = JsonConvert.DeserializeObject<SessionHelloParams>(
+                var helloParams = GabpRuntime.GabpJson.Deserialize<GabpRuntime.SessionHelloParams>(
                     JsonConvert.SerializeObject(request.Params));
 
                 if (helloParams == null || helloParams.Token != _config.Token)
@@ -306,18 +308,17 @@ namespace Lib.GAB.Server
         {
             try
             {
-                var callParams = JsonConvert.DeserializeObject<Dictionary<string, object>>(
-                    JsonConvert.SerializeObject(request.Params));
+                var paramsJson = JsonConvert.SerializeObject(request.Params);
+                var callParams = GabpRuntime.GabpJson.Deserialize<GabpRuntime.ToolsCallParams>(paramsJson);
 
-                if (callParams == null || !callParams.ContainsKey("name"))
+                if (callParams == null || string.IsNullOrWhiteSpace(callParams.Name))
                 {
                     await SendErrorResponseAsync(connection, request.Id, 
                         GabpErrorCodes.InvalidParams, "Missing 'name' parameter");
                     return;
                 }
 
-                var toolNameObj = callParams["name"];
-                var toolName = toolNameObj?.ToString();
+                var toolName = callParams.Name;
                 if (string.IsNullOrEmpty(toolName))
                 {
                     await SendErrorResponseAsync(connection, request.Id, 
@@ -333,9 +334,20 @@ namespace Lib.GAB.Server
                 }
 
                 object arguments = null;
-                // Try "parameters" first (GABS sends this), fall back to "arguments" for compatibility
-                if (!callParams.TryGetValue("parameters", out arguments))
-                    callParams.TryGetValue("arguments", out arguments);
+                var paramsObject = JObject.Parse(paramsJson);
+
+                // Respect the GABS compatibility path from PR #10:
+                // prefer "parameters" when present, then fall back to canonical "arguments".
+                if (paramsObject.TryGetValue("parameters", out var parametersToken) &&
+                    parametersToken.Type != JTokenType.Null)
+                {
+                    arguments = parametersToken;
+                }
+                else if (callParams.Arguments.HasValue)
+                {
+                    arguments = JToken.Parse(callParams.Arguments.Value.GetRawText());
+                }
+
                 var result = await _toolRegistry.CallToolAsync(toolName, arguments);
                 
                 await SendResponseAsync(connection, request.Id, result);

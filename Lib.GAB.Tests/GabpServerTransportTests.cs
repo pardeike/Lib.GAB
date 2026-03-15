@@ -1,0 +1,142 @@
+using System;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Lib.GAB.Tools;
+using Xunit;
+
+namespace Lib.GAB.Tests;
+
+public class GabpServerTransportTests
+{
+    [Fact]
+    public async Task ToolsCallAcceptsParametersCompatibilityField()
+    {
+        using var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new TransportTestTools());
+
+        await server.StartAsync();
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", server.Port);
+            using var stream = client.GetStream();
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440000",
+                type = "request",
+                method = "session/hello",
+                @params = new
+                {
+                    token = server.Token,
+                    bridgeVersion = "1.0.0",
+                    platform = "linux",
+                    launchId = "550e8400-e29b-41d4-a716-446655440001"
+                }
+            });
+
+            var welcome = await ReadFrameAsync(stream);
+            using var welcomeDoc = JsonDocument.Parse(welcome);
+            Assert.Equal("response", welcomeDoc.RootElement.GetProperty("type").GetString());
+            Assert.True(welcomeDoc.RootElement.TryGetProperty("result", out _));
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440010",
+                type = "request",
+                method = "tools/call",
+                @params = new
+                {
+                    name = "math/add",
+                    parameters = new
+                    {
+                        a = 5,
+                        b = 3
+                    }
+                }
+            });
+
+            var response = await ReadFrameAsync(stream);
+            using var responseDoc = JsonDocument.Parse(response);
+            Assert.Equal("response", responseDoc.RootElement.GetProperty("type").GetString());
+            Assert.Equal(8, responseDoc.RootElement.GetProperty("result").GetInt32());
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    private static async Task SendFrameAsync(NetworkStream stream, object payload)
+    {
+        var json = JsonSerializer.Serialize(payload);
+        var body = Encoding.UTF8.GetBytes(json);
+        var header = Encoding.ASCII.GetBytes($"Content-Length: {body.Length}\r\nContent-Type: application/json\r\n\r\n");
+
+        await stream.WriteAsync(header, 0, header.Length);
+        await stream.WriteAsync(body, 0, body.Length);
+        await stream.FlushAsync();
+    }
+
+    private static async Task<string> ReadFrameAsync(NetworkStream stream)
+    {
+        var headerBuffer = new StringBuilder();
+        var oneByte = new byte[1];
+
+        while (true)
+        {
+            var read = await stream.ReadAsync(oneByte, 0, 1);
+            if (read == 0)
+            {
+                throw new InvalidOperationException("Connection closed while reading frame header.");
+            }
+
+            headerBuffer.Append((char)oneByte[0]);
+            if (headerBuffer.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+            {
+                break;
+            }
+        }
+
+        var header = headerBuffer.ToString();
+        const string contentLengthHeader = "Content-Length:";
+        var start = header.IndexOf(contentLengthHeader, StringComparison.OrdinalIgnoreCase);
+        Assert.True(start >= 0, "Missing Content-Length header.");
+
+        start += contentLengthHeader.Length;
+        var end = header.IndexOf("\r\n", start, StringComparison.Ordinal);
+        var lengthText = header.Substring(start, end - start).Trim();
+        var contentLength = int.Parse(lengthText);
+
+        var body = new byte[contentLength];
+        var offset = 0;
+        while (offset < contentLength)
+        {
+            var read = await stream.ReadAsync(body, offset, contentLength - offset);
+            if (read == 0)
+            {
+                throw new InvalidOperationException("Connection closed while reading frame body.");
+            }
+
+            offset += read;
+        }
+
+        return Encoding.UTF8.GetString(body);
+    }
+
+    private sealed class TransportTestTools
+    {
+        [Tool("math/add", Description = "Add two numbers")]
+        public int Add(
+            [ToolParameter(Description = "First number")] int a,
+            [ToolParameter(Description = "Second number")] int b)
+        {
+            return a + b;
+        }
+    }
+}

@@ -1,5 +1,6 @@
 using System;
 using Newtonsoft.Json;
+using GabpRuntime = Gabp.Runtime;
 
 namespace Lib.GAB.Protocol
 {
@@ -12,7 +13,7 @@ namespace Lib.GAB.Protocol
         /// Protocol version identifier. Must be "gabp/1" for version 1.x
         /// </summary>
         [JsonProperty("v")]
-        public string Version { get; set; } = "gabp/1";
+        public string Version { get; set; } = GabpRuntime.GabpProtocol.EnvelopeVersion;
 
         /// <summary>
         /// Unique identifier for the message, formatted as a UUID
@@ -32,7 +33,7 @@ namespace Lib.GAB.Protocol
     /// </summary>
     public class GabpRequest : GabpMessage
     {
-        public override string Type => "request";
+        public override string Type => GabpRuntime.GabpProtocol.RequestType;
 
         /// <summary>
         /// The method name being invoked
@@ -52,7 +53,7 @@ namespace Lib.GAB.Protocol
     /// </summary>
     public class GabpResponse : GabpMessage
     {
-        public override string Type => "response";
+        public override string Type => GabpRuntime.GabpProtocol.ResponseType;
 
         /// <summary>
         /// The successful result of the method call
@@ -72,7 +73,7 @@ namespace Lib.GAB.Protocol
     /// </summary>
     public class GabpEvent : GabpMessage
     {
-        public override string Type => "event";
+        public override string Type => GabpRuntime.GabpProtocol.EventType;
 
         /// <summary>
         /// Event channel name
