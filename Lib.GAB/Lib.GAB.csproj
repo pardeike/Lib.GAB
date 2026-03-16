@@ -2,11 +2,25 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageId>Lib.GAB</PackageId>
+    <Version>0.1.0-alpha.1</Version>
+    <Authors>GABP Contributors</Authors>
+    <Description>Higher-level .NET server ergonomics for hosting a GABP endpoint.</Description>
+    <PackageTags>gabp;game-agent-bridge-protocol;server;modding;automation</PackageTags>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/pardeike/Lib.GAB</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Gabp.Runtime" Version="0.1.0-alpha.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="" />
   </ItemGroup>
 
 </Project>

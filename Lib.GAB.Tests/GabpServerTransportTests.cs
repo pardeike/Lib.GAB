@@ -242,6 +242,48 @@ public class GabpServerTransportTests
         }
     }
 
+    [Fact]
+    public async Task StopAsyncClosesActiveConnectionsAndClearsSubscriptions()
+    {
+        using var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new TransportTestTools());
+
+        await server.StartAsync();
+
+        using var client = new TcpClient();
+        await client.ConnectAsync("127.0.0.1", server.Port);
+        using var stream = client.GetStream();
+
+        await EstablishAuthenticatedSubscriptionAsync(stream, server.Token);
+        Assert.Equal(1, server.Events.GetSubscriberCount("system/status"));
+
+        await server.StopAsync();
+
+        Assert.Equal(0, server.Events.GetSubscriberCount("system/status"));
+        await AssertConnectionClosedAsync(stream);
+    }
+
+    [Fact]
+    public async Task DisposeClosesActiveConnectionsAndClearsSubscriptions()
+    {
+        var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new TransportTestTools());
+
+        await server.StartAsync();
+
+        using var client = new TcpClient();
+        await client.ConnectAsync("127.0.0.1", server.Port);
+        using var stream = client.GetStream();
+
+        await EstablishAuthenticatedSubscriptionAsync(stream, server.Token);
+        Assert.Equal(1, server.Events.GetSubscriberCount("system/status"));
+
+        server.Dispose();
+
+        Assert.Equal(0, server.Events.GetSubscriberCount("system/status"));
+        await AssertConnectionClosedAsync(stream);
+    }
+
     private static async Task SendFrameAsync(NetworkStream stream, object payload, bool includeContentType = true)
     {
         var json = JsonSerializer.Serialize(payload);
@@ -300,6 +342,47 @@ public class GabpServerTransportTests
         }
 
         return Encoding.UTF8.GetString(body);
+    }
+
+    private static async Task EstablishAuthenticatedSubscriptionAsync(NetworkStream stream, string token)
+    {
+        await SendFrameAsync(stream, new
+        {
+            v = "gabp/1",
+            id = "550e8400-e29b-41d4-a716-446655440050",
+            type = "request",
+            method = "session/hello",
+            @params = new
+            {
+                token,
+                bridgeVersion = "1.0.0",
+                platform = "linux",
+                launchId = "550e8400-e29b-41d4-a716-446655440051"
+            }
+        });
+
+        _ = await ReadFrameAsync(stream);
+
+        await SendFrameAsync(stream, new
+        {
+            v = "gabp/1",
+            id = "550e8400-e29b-41d4-a716-446655440052",
+            type = "request",
+            method = "events/subscribe",
+            @params = new
+            {
+                channels = new[] { "system/status" }
+            }
+        });
+
+        _ = await ReadFrameAsync(stream);
+    }
+
+    private static async Task AssertConnectionClosedAsync(NetworkStream stream)
+    {
+        var buffer = new byte[1];
+        var bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length).WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(0, bytesRead);
     }
 
     private sealed class TransportTestTools

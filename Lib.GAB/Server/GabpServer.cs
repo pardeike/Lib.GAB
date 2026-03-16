@@ -109,6 +109,7 @@ namespace Lib.GAB.Server
         public async Task StopAsync(CancellationToken cancellationToken = default(CancellationToken))
         {
             await _transport.StopAsync(cancellationToken);
+            DisposeActiveSessions();
         }
 
         private void SetupTransportEvents()
@@ -563,11 +564,41 @@ namespace Lib.GAB.Server
             _eventManager.RegisterChannel("system/log", "System log events");
         }
 
+        private void DisposeActiveSessions()
+        {
+            foreach (var session in _sessions.Values.ToList())
+            {
+                try
+                {
+                    session.Connection?.Dispose();
+                }
+                catch
+                {
+                    // Best-effort shutdown. Remaining cleanup continues through disconnection handlers.
+                }
+            }
+
+            _sessions.Clear();
+        }
+
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
 
+            _transport.ConnectionEstablished -= OnConnectionEstablished;
+            _transport.MessageReceived -= OnMessageReceived;
+
+            try
+            {
+                _transport.StopAsync().GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // Continue disposing active sessions and transport even if stopping fails.
+            }
+
+            DisposeActiveSessions();
             _transport?.Dispose();
         }
     }

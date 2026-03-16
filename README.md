@@ -6,6 +6,14 @@ A .NET library implementing the GABP (Game Agent Bridge Protocol) server for AI-
 
 Lib.GAB provides the higher-level server ergonomics for hosting a GABP endpoint inside a game or application. It builds on the shared `Gabp.Runtime` wire-model package for canonical protocol constants and message contracts, while keeping the integration surface simple: register tools, register event channels, and start the server.
 
+## Installation
+
+```bash
+dotnet add package Lib.GAB --prerelease
+```
+
+`Lib.GAB` brings in `Gabp.Runtime` transitively, so consumers do not need a separate direct package reference to the runtime package.
+
 ## Features
 
 - **GABP 1.0 Compliant**: Full implementation of the GABP specification

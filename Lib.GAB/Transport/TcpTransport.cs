@@ -46,12 +46,15 @@ namespace Lib.GAB.Transport
             var header = $"Content-Length: {jsonBytes.Length}\r\nContent-Type: application/json\r\n\r\n";
             var headerBytes = Encoding.UTF8.GetBytes(header);
 
-            var combinedToken = CancellationTokenSource.CreateLinkedTokenSource(
-                cancellationToken, _cancellationTokenSource.Token).Token;
+            using (var linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken, _cancellationTokenSource.Token))
+            {
+                var combinedToken = linkedTokenSource.Token;
 
-            await _stream.WriteAsync(headerBytes, 0, headerBytes.Length, combinedToken);
-            await _stream.WriteAsync(jsonBytes, 0, jsonBytes.Length, combinedToken);
-            await _stream.FlushAsync(combinedToken);
+                await _stream.WriteAsync(headerBytes, 0, headerBytes.Length, combinedToken);
+                await _stream.WriteAsync(jsonBytes, 0, jsonBytes.Length, combinedToken);
+                await _stream.FlushAsync(combinedToken);
+            }
         }
 
         public void Dispose()
