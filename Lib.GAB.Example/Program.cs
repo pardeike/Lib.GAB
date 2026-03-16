@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Lib.GAB;
 using Lib.GAB.Tools;
 using Lib.GAB.Server;
+using GabpApi = Lib.GAB.Gabp;
 
 // Example game/application tools
 public class GameTools
@@ -56,7 +56,7 @@ class Program
         Console.WriteLine("Starting GABP Server Example...");
 
         // Check if we're running under GABS
-        if (Gabp.IsRunningUnderGabs())
+        if (GabpApi.IsRunningUnderGabs())
         {
             Console.WriteLine("\nRunning under GABS - using GABS-aware configuration");
             await RunGabsAwareExample();
@@ -82,7 +82,7 @@ class Program
     {
         // Create server with automatic GABS environment detection
         var gameTools = new GameTools();
-        var server = Gabp.CreateGabsAwareServerWithInstance("Example Game", "1.0.0", gameTools);
+        var server = GabpApi.CreateGabsAwareServerWithInstance("Example Game", "1.0.0", gameTools);
 
         // Register some event channels
         server.Events.RegisterChannel("player/move", "Player movement events");
@@ -132,7 +132,7 @@ class Program
     {
         // Create server with tools from a class instance (traditional way)
         var gameTools = new GameTools();
-        var server = Gabp.CreateServerWithInstance("Example Game", "1.0.0", gameTools, port: 0);
+        var server = GabpApi.CreateServerWithInstance("Example Game", "1.0.0", gameTools, port: 0);
 
         // Register some event channels
         server.Events.RegisterChannel("player/move", "Player movement events");
@@ -179,7 +179,7 @@ class Program
 
         // Create server with external configuration
         var gameTools = new GameTools();
-        var server = Gabp.CreateServerWithInstanceAndExternalConfig(
+        var server = GabpApi.CreateServerWithInstanceAndExternalConfig(
             "Example Game", "1.0.0", gameTools, externalPort, externalToken, gameId);
 
         // Register event channels

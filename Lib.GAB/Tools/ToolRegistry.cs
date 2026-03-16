@@ -184,18 +184,23 @@ namespace Lib.GAB.Tools
             }
 
             // Warn about unrecognized keys that don't match any method parameter
-            var methodParamNames = new HashSet<string>(methodParams.Select(p => p.Name));
+            var methodParamNames = methodParams.Select(p => p.Name).ToArray();
+            var exactMethodParamNames = new HashSet<string>(methodParamNames, StringComparer.Ordinal);
             foreach (var key in paramDict.Keys)
             {
-                if (!methodParamNames.Contains(key))
+                if (exactMethodParamNames.Contains(key))
                 {
-                    // Find close matches for a helpful warning
-                    var closest = methodParamNames
-                        .Where(n => n.Equals(key, StringComparison.OrdinalIgnoreCase))
-                        .FirstOrDefault();
-                    var hint = closest != null ? $" Did you mean '{closest}'?" : "";
-                    Trace.TraceWarning($"[ToolRegistry] Tool '{method.Name}': unrecognized parameter '{key}'.{hint} Known parameters: [{string.Join(", ", methodParamNames)}]");
+                    continue;
                 }
+
+                var closest = methodParamNames
+                    .FirstOrDefault(n => n.Equals(key, StringComparison.OrdinalIgnoreCase));
+                if (closest != null)
+                {
+                    continue;
+                }
+
+                Trace.TraceWarning($"[ToolRegistry] Tool '{method.Name}': unrecognized parameter '{key}'. Known parameters: [{string.Join(", ", methodParamNames)}]");
             }
 
             for (int i = 0; i < methodParams.Length; i++)
