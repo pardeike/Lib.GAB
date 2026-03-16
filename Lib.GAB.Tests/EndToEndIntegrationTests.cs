@@ -18,7 +18,7 @@ public class EndToEndIntegrationTests : IDisposable
     private readonly ITestOutputHelper _output;
     private readonly string _gabsExecutable;
     private readonly string _testWorkspace;
-    private Process? _gabsProcess;
+    private Process _gabsProcess;
 
     public EndToEndIntegrationTests(ITestOutputHelper output)
     {

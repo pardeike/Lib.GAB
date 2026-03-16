@@ -90,7 +90,7 @@ class Program
         server.Events.RegisterChannel("game/status", "Game status events");
 
         // Register a custom tool manually
-        server.Tools.RegisterTool("game/status", _ => Task.FromResult<object?>(new
+        server.Tools.RegisterTool("game/status", _ => Task.FromResult<object>(new
         {
             status = "running",
             players = 1,
@@ -140,7 +140,7 @@ class Program
         server.Events.RegisterChannel("game/status", "Game status events");
 
         // Register a custom tool manually
-        server.Tools.RegisterTool("game/status", _ => Task.FromResult<object?>(new
+        server.Tools.RegisterTool("game/status", _ => Task.FromResult<object>(new
         {
             status = "running",
             players = 1,
@@ -188,7 +188,7 @@ class Program
         server.Events.RegisterChannel("game/status", "Game status events");
 
         // Register a custom tool manually
-        server.Tools.RegisterTool("game/status", _ => Task.FromResult<object?>(new
+        server.Tools.RegisterTool("game/status", _ => Task.FromResult<object>(new
         {
             status = "running",
             players = 1,

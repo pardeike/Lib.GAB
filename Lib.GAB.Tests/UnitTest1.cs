@@ -25,7 +25,7 @@ public class GabpServerTests
         var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
 
         // Act
-        server.Tools.RegisterTool("test/hello", _ => Task.FromResult<object?>("Hello World"));
+        server.Tools.RegisterTool("test/hello", _ => Task.FromResult<object>("Hello World"));
 
         // Assert
         Assert.True(server.Tools.HasTool("test/hello"));
@@ -38,7 +38,7 @@ public class GabpServerTests
     {
         // Arrange
         var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
-        server.Tools.RegisterTool("test/echo", args => Task.FromResult<object?>(args));
+        server.Tools.RegisterTool("test/echo", args => Task.FromResult<object>(args));
 
         // Act
         var result = await server.Tools.CallToolAsync("test/echo", "test message");

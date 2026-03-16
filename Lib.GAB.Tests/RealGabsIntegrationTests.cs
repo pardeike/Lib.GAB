@@ -20,7 +20,7 @@ public class RealGabsIntegrationTests : IDisposable
     private readonly ITestOutputHelper _output;
     private readonly string _gabsExecutable;
     private readonly string _tempDir;
-    private Process? _gabsProcess;
+    private Process _gabsProcess;
 
     public RealGabsIntegrationTests(ITestOutputHelper output)
     {
@@ -532,7 +532,7 @@ class Program
     private class GameOperationResult
     {
         public bool Success { get; set; }
-        public string? Error { get; set; }
+        public string Error { get; set; }
         public int Port { get; set; }
     }
 

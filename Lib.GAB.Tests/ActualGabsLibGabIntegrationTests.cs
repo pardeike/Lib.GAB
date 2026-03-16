@@ -18,7 +18,7 @@ public class ActualGabsLibGabIntegrationTests : IDisposable
     private readonly ITestOutputHelper _output;
     private readonly string _gabsExecutable;
     private readonly string _testConfigDir;
-    private Process? _gabsServerProcess;
+    private Process _gabsServerProcess;
 
     public ActualGabsLibGabIntegrationTests(ITestOutputHelper output)
     {
