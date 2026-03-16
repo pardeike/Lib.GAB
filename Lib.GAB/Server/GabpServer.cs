@@ -335,10 +335,9 @@ namespace Lib.GAB.Server
             {
                 var prop = new Dictionary<string, object>();
 
+                prop["type"] = f.Type;
                 if (f.Nullable)
-                    prop["type"] = new[] { f.Type, "null" };
-                else
-                    prop["type"] = f.Type;
+                    prop["nullable"] = true;
 
                 if (!string.IsNullOrEmpty(f.Description))
                     prop["description"] = f.Description;
