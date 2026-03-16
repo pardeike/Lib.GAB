@@ -9,7 +9,7 @@ Lib.GAB provides the higher-level server ergonomics for hosting a GABP endpoint 
 ## Installation
 
 ```bash
-dotnet add package Lib.GAB --prerelease
+dotnet add package Lib.GAB
 ```
 
 `Lib.GAB` brings in `Gabp.Runtime` transitively, so consumers do not need a separate direct package reference to the runtime package.

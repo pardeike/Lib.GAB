@@ -4,7 +4,7 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Lib.GAB</PackageId>
-    <Version>0.1.0-alpha.1</Version>
+    <Version>0.1.0</Version>
     <Authors>GABP Contributors</Authors>
     <Description>Higher-level .NET server ergonomics for hosting a GABP endpoint.</Description>
     <PackageTags>gabp;game-agent-bridge-protocol;server;modding;automation</PackageTags>
