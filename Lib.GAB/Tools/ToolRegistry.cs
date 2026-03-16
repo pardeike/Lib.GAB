@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -182,15 +183,44 @@ namespace Lib.GAB.Tools
                 paramDict = JsonConvert.DeserializeObject<Dictionary<string, object>>(json) ?? new Dictionary<string, object>();
             }
 
+            // Warn about unrecognized keys that don't match any method parameter
+            var methodParamNames = new HashSet<string>(methodParams.Select(p => p.Name));
+            foreach (var key in paramDict.Keys)
+            {
+                if (!methodParamNames.Contains(key))
+                {
+                    // Find close matches for a helpful warning
+                    var closest = methodParamNames
+                        .Where(n => n.Equals(key, StringComparison.OrdinalIgnoreCase))
+                        .FirstOrDefault();
+                    var hint = closest != null ? $" Did you mean '{closest}'?" : "";
+                    Trace.TraceWarning($"[ToolRegistry] Tool '{method.Name}': unrecognized parameter '{key}'.{hint} Known parameters: [{string.Join(", ", methodParamNames)}]");
+                }
+            }
+
             for (int i = 0; i < methodParams.Length; i++)
             {
                 var param = methodParams[i];
-                
+
                 if (paramDict.ContainsKey(param.Name))
                 {
                     try
                     {
                         var value = paramDict[param.Name];
+                        paramValues[i] = ConvertValue(value, param.ParameterType);
+                    }
+                    catch
+                    {
+                        paramValues[i] = param.HasDefaultValue ? param.DefaultValue : null;
+                    }
+                }
+                else if (paramDict.Keys.FirstOrDefault(k => k.Equals(param.Name, StringComparison.OrdinalIgnoreCase)) is string caseInsensitiveMatch)
+                {
+                    // Case-insensitive fallback
+                    Trace.TraceWarning($"[ToolRegistry] Tool '{method.Name}': parameter '{caseInsensitiveMatch}' matched '{param.Name}' via case-insensitive fallback.");
+                    try
+                    {
+                        var value = paramDict[caseInsensitiveMatch];
                         paramValues[i] = ConvertValue(value, param.ParameterType);
                     }
                     catch
