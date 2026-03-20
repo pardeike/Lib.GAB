@@ -78,6 +78,7 @@ namespace Lib.GAB.Tools
                     Name = toolAttr.Name,
                     Title = toolAttr.Title,
                     Description = toolAttr.Description,
+                    ResultDescription = toolAttr.ResultDescription,
                     RequiresAuth = toolAttr.RequiresAuth,
                     Parameters = GetParameterInfo(method),
                     ResponseFields = GetResponseFieldInfo(method)

@@ -26,6 +26,11 @@ namespace Lib.GAB.Tools
         public string Title { get; set; }
 
         /// <summary>
+        /// Human-readable summary of what a successful result means or what useful handle it returns.
+        /// </summary>
+        public string ResultDescription { get; set; }
+
+        /// <summary>
         /// Parameter information
         /// </summary>
         public List<ToolParameterInfo> Parameters { get; set; } = new List<ToolParameterInfo>();

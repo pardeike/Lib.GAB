@@ -300,7 +300,7 @@ namespace Lib.GAB.Server
                     required = p.Required,
                     defaultValue = p.DefaultValue
                 }).ToList(),
-                outputSchema = BuildOutputSchema(t.ResponseFields),
+                outputSchema = BuildOutputSchema(t.ResultDescription, t.ResponseFields),
                 requiresAuth = t.RequiresAuth
             }).ToList();
 
@@ -352,11 +352,22 @@ namespace Lib.GAB.Server
             return schema;
         }
 
-        private static Dictionary<string, object> BuildOutputSchema(List<ToolResponseFieldInfo> fields)
+        private static Dictionary<string, object> BuildOutputSchema(string resultDescription, List<ToolResponseFieldInfo> fields)
         {
-            if (fields.Count == 0)
+            if (fields.Count == 0 && string.IsNullOrWhiteSpace(resultDescription))
             {
                 return new Dictionary<string, object>();
+            }
+
+            var schema = new Dictionary<string, object>();
+            if (!string.IsNullOrWhiteSpace(resultDescription))
+            {
+                schema["description"] = resultDescription;
+            }
+
+            if (fields.Count == 0)
+            {
+                return schema;
             }
 
             var properties = new Dictionary<string, object>();
@@ -364,9 +375,11 @@ namespace Lib.GAB.Server
 
             foreach (var f in fields)
             {
-                var prop = new Dictionary<string, object>();
+                var prop = new Dictionary<string, object>
+                {
+                    ["type"] = f.Type
+                };
 
-                prop["type"] = f.Type;
                 if (f.Nullable)
                     prop["nullable"] = true;
 
@@ -379,11 +392,8 @@ namespace Lib.GAB.Server
                     required.Add(f.Name);
             }
 
-            var schema = new Dictionary<string, object>
-            {
-                ["type"] = "object",
-                ["properties"] = properties
-            };
+            schema["type"] = "object";
+            schema["properties"] = properties;
 
             if (required.Count > 0)
                 schema["required"] = required;

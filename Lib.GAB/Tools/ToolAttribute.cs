@@ -25,6 +25,12 @@ namespace Lib.GAB.Tools
         public string Title { get; set; }
 
         /// <summary>
+        /// Optional human-readable summary of what a successful result means or what useful handle it returns.
+        /// This is emitted as the root description of outputSchema when present.
+        /// </summary>
+        public string ResultDescription { get; set; }
+
+        /// <summary>
         /// Whether this tool requires authentication
         /// </summary>
         public bool RequiresAuth { get; set; } = true;

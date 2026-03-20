@@ -189,7 +189,7 @@ using Lib.GAB.Tools;
 
 public class ApplicationTools
 {
-    [Tool("data/get", Description = "Get application data")]
+    [Tool("data/get", Description = "Get application data", ResultDescription = "The requested identifier and its resolved value.")]
     [ToolResponse("dataId", Type = "string", Description = "Requested data identifier")]
     [ToolResponse("value", Type = "string", Description = "Resolved value")]
     public object GetData([ToolParameter(Description = "Data ID")] string dataId)
@@ -197,7 +197,7 @@ public class ApplicationTools
         return new { dataId, value = GetDataValue(dataId) };
     }
 
-    [Tool("action/execute", Description = "Execute an action")]
+    [Tool("action/execute", Description = "Execute an action", ResultDescription = "Whether the action succeeded and which action type ran.")]
     [ToolResponse("success", Type = "boolean", Description = "True when the action completed successfully")]
     [ToolResponse("actionType", Type = "string", Description = "Action that was executed")]
     public async Task<object> ExecuteAction(
@@ -217,10 +217,15 @@ await server.StartAsync();
 
 ### Documenting Tool Responses
 
-If you annotate a tool with `[ToolResponse]`, Lib.GAB includes an `outputSchema` in `tools/list`. That makes downstream bridges such as GABS surface richer tool metadata to AI clients.
+Use `ResultDescription` when you want to describe what a successful result means or what useful handle it returns. Lib.GAB emits that text as the root `description` of `outputSchema`.
+
+Use `[ToolResponse]` when individual response fields are worth surfacing in machine-readable metadata. When present, Lib.GAB also includes those fields in `outputSchema`, which makes downstream bridges such as GABS surface richer tool metadata to AI clients.
 
 ```csharp
-[Tool("screen/capture", Description = "Capture the current screen state")]
+[Tool(
+    "screen/capture",
+    Description = "Capture the current screen state",
+    ResultDescription = "Whether capture succeeded, the high-level UI screen type, and an optional detail message.")]
 [ToolResponse("success", Type = "boolean", Description = "Whether capture succeeded")]
 [ToolResponse("screenType", Type = "string", Description = "High-level UI screen name")]
 [ToolResponse("message", Type = "string", Description = "Optional detail", Always = false, Nullable = true)]
@@ -234,6 +239,8 @@ public object CaptureScreen()
     };
 }
 ```
+
+For many tools, `ResultDescription` is enough by itself. Field-level response metadata stays optional.
 
 ## Event Broadcasting
 
@@ -286,6 +293,12 @@ await server.Attention.PublishAsync(new AttentionItem
 ```
 
 Use the same `attentionId` when updating an existing item. Acknowledging the matching item through `attention/ack` clears it and emits `attention/cleared`.
+
+Most tool authors do not need direct attention logic. The usual pattern is:
+
+- normal tool code returns ordinary success or failure results
+- the integration layer decides which async logs or operation failures should open attention
+- only advanced integrations publish attention items directly
 
 ## API Reference
 

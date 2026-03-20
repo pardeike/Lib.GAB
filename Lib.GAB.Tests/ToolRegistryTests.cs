@@ -55,6 +55,17 @@ public class ToolRegistryTests
         Assert.Contains("unrecognized parameter 'c'", traceOutput);
     }
 
+    [Fact]
+    public void CapturesOptionalResultDescriptionFromToolMetadata()
+    {
+        var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new ParameterBindingTestTools());
+
+        var tool = Assert.Single(server.Tools.GetTools());
+
+        Assert.Equal("Returns the sum of the two inputs as an integer.", tool.ResultDescription);
+    }
+
     private static string CaptureTraceOutput(Action action)
     {
         lock (TraceLock)
@@ -81,7 +92,7 @@ public class ToolRegistryTests
 
     public class ParameterBindingTestTools
     {
-        [Tool("math/add", Description = "Add two numbers")]
+        [Tool("math/add", Description = "Add two numbers", ResultDescription = "Returns the sum of the two inputs as an integer.")]
         public int Add([ToolParameter(Description = "First number")] int a,
             [ToolParameter(Description = "Second number")] int b)
         {
