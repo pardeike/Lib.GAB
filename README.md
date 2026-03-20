@@ -21,6 +21,7 @@ dotnet add package Lib.GAB
 - **Tool Registration**: Manual and attribute-based tool registration
 - **Schema-Aware Tool Metadata**: `tools/list` emits canonical `title`, `inputSchema`, and `outputSchema` descriptors
 - **Event System**: Real-time event broadcasting to connected bridges
+- **Optional Attention Support**: Exposes `attention/current`, `attention/ack`, and attention lifecycle events when enabled
 - **Session Management**: Token-based authentication and capability negotiation
 - **Shared Runtime Types**: Reuses `Gabp.Runtime` for protocol constants and request models
 - **Easy Integration**: Simple API for quick setup and customization
@@ -248,6 +249,43 @@ await server.Events.EmitEventAsync("app/status_change", new
     timestamp = DateTime.UtcNow
 });
 ```
+
+## Optional Attention Support
+
+Enable attention support when your integration needs to surface important async game state that the bridge must acknowledge before continuing. When enabled, Lib.GAB adds:
+
+- `attention/current`
+- `attention/ack`
+- `attention/opened`
+- `attention/updated`
+- `attention/cleared`
+
+```csharp
+using Lib.GAB;
+using Lib.GAB.Attention;
+
+var server = Gabp.CreateServer()
+    .UseAppInfo("My Game", "1.0.0")
+    .UseGabsEnvironmentIfAvailable()
+    .EnableAttentionSupport()
+    .Build();
+
+await server.Attention.PublishAsync(new AttentionItem
+{
+    AttentionId = "attn_42",
+    Severity = "error",
+    Blocking = true,
+    StateInvalidated = true,
+    Summary = "Selection action failed and prior game-state assumptions may no longer be valid.",
+    CausalMethod = "rimworld/select_pawn",
+    OpenedAtSequence = 1201,
+    LatestSequence = 1237,
+    DiagnosticsCursor = 1237,
+    TotalUrgentEntries = 37
+});
+```
+
+Use the same `attentionId` when updating an existing item. Acknowledging the matching item through `attention/ack` clears it and emits `attention/cleared`.
 
 ## API Reference
 

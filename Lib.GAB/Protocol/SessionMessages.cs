@@ -87,10 +87,20 @@ namespace Lib.GAB.Protocol
     public class Capabilities
     {
         /// <summary>
-        /// Available tools/methods
+        /// Available protocol methods
         /// </summary>
-        [JsonProperty("tools")]
-        public List<string> Tools { get; set; } = new List<string>();
+        [JsonProperty("methods")]
+        public List<string> Methods { get; set; } = new List<string>();
+
+        /// <summary>
+        /// Backwards-compatible alias for Methods.
+        /// </summary>
+        [JsonIgnore]
+        public List<string> Tools
+        {
+            get => Methods;
+            set => Methods = value ?? new List<string>();
+        }
 
         /// <summary>
         /// Available event channels

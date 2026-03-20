@@ -60,6 +60,15 @@ namespace Lib.GAB
             return this;
         }
 
+        /// <summary>
+        /// Enable additive attention support (attention/current, attention/ack, and attention lifecycle events).
+        /// </summary>
+        public GabpServerBuilder EnableAttentionSupport()
+        {
+            _config.EnableAttentionSupport = true;
+            return this;
+        }
+
 
 
         /// <summary>

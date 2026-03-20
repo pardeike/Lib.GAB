@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Lib.GAB.Attention;
 using Lib.GAB.Tools;
 using Xunit;
 
@@ -47,7 +48,7 @@ public class GabpServerTransportTests
 
             var capabilities = welcomeResult.GetProperty("capabilities");
             Assert.True(capabilities.TryGetProperty("methods", out var methods));
-            Assert.Contains("math/add", methods.EnumerateArray().Select(entry => entry.GetString()));
+            AssertCanonicalProtocolMethods(methods, includeAttention: false);
             Assert.False(capabilities.TryGetProperty("tools", out _));
 
             await SendFrameAsync(stream, new
@@ -114,7 +115,8 @@ public class GabpServerTransportTests
 
             Assert.Equal("1.0", result.GetProperty("schemaVersion").GetString());
             Assert.True(capabilities.TryGetProperty("methods", out var methods));
-            Assert.Contains("math/add", methods.EnumerateArray().Select(entry => entry.GetString()));
+            AssertCanonicalProtocolMethods(methods, includeAttention: false);
+            Assert.DoesNotContain(AttentionProtocol.CurrentMethod, methods.EnumerateArray().Select(entry => entry.GetString()));
             Assert.False(capabilities.TryGetProperty("tools", out _));
         }
         finally
@@ -243,6 +245,188 @@ public class GabpServerTransportTests
     }
 
     [Fact]
+    public async Task SessionHelloAdvertisesAttentionSurfaceWhenEnabled()
+    {
+        using var server = Gabp.CreateServer()
+            .UseAppInfo("Test App", "1.0.0")
+            .EnableAttentionSupport()
+            .Build();
+
+        await server.StartAsync();
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", server.Port);
+            using var stream = client.GetStream();
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440042",
+                type = "request",
+                method = "session/hello",
+                @params = new
+                {
+                    token = server.Token,
+                    bridgeVersion = "1.0.0",
+                    platform = "linux",
+                    launchId = "550e8400-e29b-41d4-a716-446655440043"
+                }
+            });
+
+            var welcome = await ReadFrameAsync(stream);
+            using var welcomeDoc = JsonDocument.Parse(welcome);
+            var capabilities = welcomeDoc.RootElement.GetProperty("result").GetProperty("capabilities");
+
+            AssertCanonicalProtocolMethods(capabilities.GetProperty("methods"), includeAttention: true);
+            var events = capabilities.GetProperty("events").EnumerateArray().Select(entry => entry.GetString()).ToArray();
+            Assert.Contains(AttentionProtocol.OpenedChannel, events);
+            Assert.Contains(AttentionProtocol.UpdatedChannel, events);
+            Assert.Contains(AttentionProtocol.ClearedChannel, events);
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AttentionCurrentAndAckRoundTripWhenEnabled()
+    {
+        using var server = Gabp.CreateServer()
+            .UseAppInfo("Test App", "1.0.0")
+            .EnableAttentionSupport()
+            .Build();
+
+        await server.Attention.PublishAsync(CreateAttentionItem("attn_42", "Selection failed", 1201, 1237));
+        await server.StartAsync();
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", server.Port);
+            using var stream = client.GetStream();
+
+            await EstablishAuthenticatedSessionAsync(stream, server.Token);
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440044",
+                type = "request",
+                method = AttentionProtocol.CurrentMethod,
+                @params = new { }
+            });
+
+            var currentResponse = await ReadFrameAsync(stream);
+            using var currentDoc = JsonDocument.Parse(currentResponse);
+            var attention = currentDoc.RootElement.GetProperty("result").GetProperty("attention");
+            Assert.Equal("attn_42", attention.GetProperty("attentionId").GetString());
+            Assert.Equal("open", attention.GetProperty("state").GetString());
+            Assert.True(attention.GetProperty("blocking").GetBoolean());
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440045",
+                type = "request",
+                method = AttentionProtocol.AckMethod,
+                @params = new
+                {
+                    attentionId = "attn_42"
+                }
+            });
+
+            var ackResponse = await ReadFrameAsync(stream);
+            using var ackDoc = JsonDocument.Parse(ackResponse);
+            var ackResult = ackDoc.RootElement.GetProperty("result");
+            Assert.True(ackResult.GetProperty("acknowledged").GetBoolean());
+            Assert.Equal("attn_42", ackResult.GetProperty("attentionId").GetString());
+            Assert.Equal(JsonValueKind.Null, ackResult.GetProperty("currentAttention").ValueKind);
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440046",
+                type = "request",
+                method = AttentionProtocol.CurrentMethod,
+                @params = new { }
+            });
+
+            var afterAckResponse = await ReadFrameAsync(stream);
+            using var afterAckDoc = JsonDocument.Parse(afterAckResponse);
+            Assert.Equal(JsonValueKind.Null, afterAckDoc.RootElement.GetProperty("result").GetProperty("attention").ValueKind);
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AttentionLifecycleEventsEmitOpenedUpdatedAndCleared()
+    {
+        using var server = Gabp.CreateServer()
+            .UseAppInfo("Test App", "1.0.0")
+            .EnableAttentionSupport()
+            .Build();
+
+        await server.StartAsync();
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", server.Port);
+            using var stream = client.GetStream();
+
+            await EstablishAuthenticatedSessionAsync(stream, server.Token);
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440047",
+                type = "request",
+                method = "events/subscribe",
+                @params = new
+                {
+                    channels = new[]
+                    {
+                        AttentionProtocol.OpenedChannel,
+                        AttentionProtocol.UpdatedChannel,
+                        AttentionProtocol.ClearedChannel
+                    }
+                }
+            });
+
+            _ = await ReadFrameAsync(stream);
+
+            await server.Attention.PublishAsync(CreateAttentionItem("attn_7", "Open attention", 10, 12));
+            using var openedDoc = JsonDocument.Parse(await ReadFrameAsync(stream));
+            Assert.Equal(AttentionProtocol.OpenedChannel, openedDoc.RootElement.GetProperty("channel").GetString());
+            Assert.Equal("attn_7", openedDoc.RootElement.GetProperty("payload").GetProperty("attentionId").GetString());
+            Assert.Equal("open", openedDoc.RootElement.GetProperty("payload").GetProperty("state").GetString());
+
+            var updatedAttention = CreateAttentionItem("attn_7", "Updated attention", 10, 15);
+            updatedAttention.TotalUrgentEntries = 9;
+            await server.Attention.PublishAsync(updatedAttention);
+            using var updatedDoc = JsonDocument.Parse(await ReadFrameAsync(stream));
+            Assert.Equal(AttentionProtocol.UpdatedChannel, updatedDoc.RootElement.GetProperty("channel").GetString());
+            Assert.Equal("Updated attention", updatedDoc.RootElement.GetProperty("payload").GetProperty("summary").GetString());
+
+            await server.Attention.AcknowledgeAsync("attn_7");
+            using var clearedDoc = JsonDocument.Parse(await ReadFrameAsync(stream));
+            Assert.Equal(AttentionProtocol.ClearedChannel, clearedDoc.RootElement.GetProperty("channel").GetString());
+            Assert.Equal("cleared", clearedDoc.RootElement.GetProperty("payload").GetProperty("state").GetString());
+            Assert.False(clearedDoc.RootElement.GetProperty("payload").GetProperty("blocking").GetBoolean());
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
     public async Task StopAsyncClosesActiveConnectionsAndClearsSubscriptions()
     {
         using var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
@@ -344,12 +528,64 @@ public class GabpServerTransportTests
         return Encoding.UTF8.GetString(body);
     }
 
-    private static async Task EstablishAuthenticatedSubscriptionAsync(NetworkStream stream, string token)
+    private static void AssertCanonicalProtocolMethods(JsonElement methodsElement, bool includeAttention)
+    {
+        var methods = methodsElement.EnumerateArray().Select(entry => entry.GetString()).ToArray();
+
+        Assert.Contains("session/hello", methods);
+        Assert.Contains("tools/list", methods);
+        Assert.Contains("tools/call", methods);
+        Assert.Contains("events/subscribe", methods);
+        Assert.Contains("events/unsubscribe", methods);
+        Assert.DoesNotContain("math/add", methods);
+
+        if (includeAttention)
+        {
+            Assert.Contains(AttentionProtocol.CurrentMethod, methods);
+            Assert.Contains(AttentionProtocol.AckMethod, methods);
+        }
+        else
+        {
+            Assert.DoesNotContain(AttentionProtocol.CurrentMethod, methods);
+            Assert.DoesNotContain(AttentionProtocol.AckMethod, methods);
+        }
+    }
+
+    private static AttentionItem CreateAttentionItem(string attentionId, string summary, long openedAtSequence, long latestSequence)
+    {
+        return new AttentionItem
+        {
+            AttentionId = attentionId,
+            State = "open",
+            Severity = "error",
+            Blocking = true,
+            StateInvalidated = true,
+            Summary = summary,
+            CausalOperationId = "op_123",
+            CausalMethod = "rimworld/select_pawn",
+            OpenedAtSequence = openedAtSequence,
+            LatestSequence = latestSequence,
+            DiagnosticsCursor = latestSequence,
+            TotalUrgentEntries = 5,
+            Sample =
+            {
+                new AttentionSample
+                {
+                    Level = "error",
+                    Message = "Representative error",
+                    RepeatCount = 2,
+                    LatestSequence = latestSequence
+                }
+            }
+        };
+    }
+
+    private static async Task EstablishAuthenticatedSessionAsync(NetworkStream stream, string token)
     {
         await SendFrameAsync(stream, new
         {
             v = "gabp/1",
-            id = "550e8400-e29b-41d4-a716-446655440050",
+            id = "550e8400-e29b-41d4-a716-446655440060",
             type = "request",
             method = "session/hello",
             @params = new
@@ -357,11 +593,16 @@ public class GabpServerTransportTests
                 token,
                 bridgeVersion = "1.0.0",
                 platform = "linux",
-                launchId = "550e8400-e29b-41d4-a716-446655440051"
+                launchId = "550e8400-e29b-41d4-a716-446655440061"
             }
         });
 
         _ = await ReadFrameAsync(stream);
+    }
+
+    private static async Task EstablishAuthenticatedSubscriptionAsync(NetworkStream stream, string token)
+    {
+        await EstablishAuthenticatedSessionAsync(stream, token);
 
         await SendFrameAsync(stream, new
         {

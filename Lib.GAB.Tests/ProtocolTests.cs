@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using Lib.GAB.Attention;
 using Lib.GAB.Protocol;
 
 namespace Lib.GAB.Tests;
@@ -47,7 +48,7 @@ public class ProtocolTests
                 App = new AppInfo { Name = "Test App", Version = "1.0.0" },
                 Capabilities = new Capabilities
                 {
-                    Tools = new List<string> { "test/tool" },
+                    Methods = new List<string> { "tools/list" },
                     Events = new List<string> { "test/event" },
                     Resources = new List<string>()
                 },
@@ -117,5 +118,18 @@ public class ProtocolTests
         Assert.NotNull(deserialized.Error);
         Assert.Equal(GabpErrorCodes.MethodNotFound, deserialized.Error.Code);
         Assert.Equal("Method not found", deserialized.Error.Message);
+    }
+
+    [Fact]
+    public void CapabilitiesToolsAliasMapsToMethods()
+    {
+        var capabilities = new Capabilities
+        {
+            Tools = new List<string> { "tools/list", AttentionProtocol.CurrentMethod }
+        };
+
+        Assert.Contains("tools/list", capabilities.Methods);
+        Assert.Contains(AttentionProtocol.CurrentMethod, capabilities.Methods);
+        Assert.Same(capabilities.Methods, capabilities.Tools);
     }
 }

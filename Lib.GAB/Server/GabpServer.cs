@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Lib.GAB.Attention;
 using Lib.GAB.Events;
 using Lib.GAB.Protocol;
 using Lib.GAB.Tools;
@@ -40,6 +41,11 @@ namespace Lib.GAB.Server
         /// Application information
         /// </summary>
         public AppInfo AppInfo { get; set; } = new AppInfo { Name = "GABP Server", Version = "1.0.0" };
+
+        /// <summary>
+        /// Whether additive attention support should be exposed.
+        /// </summary>
+        public bool EnableAttentionSupport { get; set; }
     }
 
     /// <summary>
@@ -51,8 +57,18 @@ namespace Lib.GAB.Server
         private readonly ITransport _transport;
         private readonly IToolRegistry _toolRegistry;
         private readonly IEventManager _eventManager;
+        private readonly IAttentionManager _attentionManager;
         private readonly ConcurrentDictionary<string, SessionInfo> _sessions = new ConcurrentDictionary<string, SessionInfo>();
         private bool _disposed;
+
+        private static readonly IReadOnlyList<string> BaseProtocolMethods = new[]
+        {
+            GabpRuntime.GabpProtocol.SessionHelloMethod,
+            GabpRuntime.GabpProtocol.ToolsListMethod,
+            GabpRuntime.GabpProtocol.ToolsCallMethod,
+            "events/subscribe",
+            "events/unsubscribe"
+        };
 
         private class SessionInfo
         {
@@ -69,6 +85,7 @@ namespace Lib.GAB.Server
             _transport = new TcpTransport(_config.Port);
             _toolRegistry = new ToolRegistry();
             _eventManager = new EventManager();
+            _attentionManager = new AttentionManager(_eventManager, _config.EnableAttentionSupport);
 
             SetupTransportEvents();
             RegisterCoreTools();
@@ -94,6 +111,11 @@ namespace Lib.GAB.Server
         /// Event manager for emitting events
         /// </summary>
         public IEventManager Events => _eventManager;
+
+        /// <summary>
+        /// Attention manager for publishing and acknowledging important game state.
+        /// </summary>
+        public IAttentionManager Attention => _attentionManager;
 
         /// <summary>
         /// Start the server
@@ -199,6 +221,14 @@ namespace Lib.GAB.Server
                 case "events/unsubscribe":
                     await HandleEventsUnsubscribeAsync(connection, request);
                     break;
+
+                case AttentionProtocol.CurrentMethod when _attentionManager.IsEnabled:
+                    await HandleAttentionCurrentAsync(connection, request);
+                    break;
+
+                case AttentionProtocol.AckMethod when _attentionManager.IsEnabled:
+                    await HandleAttentionAckAsync(connection, request);
+                    break;
                 
                 default:
                     await SendErrorResponseAsync(connection, request.Id, 
@@ -238,7 +268,7 @@ namespace Lib.GAB.Server
                     },
                     Capabilities = new GabpRuntime.GabpCapabilities
                     {
-                        Methods = _toolRegistry.GetTools().Select(t => t.Name).ToList(),
+                        Methods = GetSupportedProtocolMethods(),
                         Events = _eventManager.GetAvailableChannels(),
                         Resources = new List<string>() // TODO: Add resource support
                     },
@@ -525,6 +555,39 @@ namespace Lib.GAB.Server
             }
         }
 
+        private async Task HandleAttentionCurrentAsync(IConnection connection, GabpRequest request)
+        {
+            var currentAttention = _attentionManager.GetCurrent();
+            await SendResponseAsync(connection, request.Id, new AttentionCurrentResult
+            {
+                Attention = currentAttention
+            });
+        }
+
+        private async Task HandleAttentionAckAsync(IConnection connection, GabpRequest request)
+        {
+            try
+            {
+                var ackParams = JsonConvert.DeserializeObject<AttentionAckParams>(
+                    JsonConvert.SerializeObject(request.Params));
+
+                if (ackParams == null || string.IsNullOrWhiteSpace(ackParams.AttentionId))
+                {
+                    await SendErrorResponseAsync(connection, request.Id,
+                        GabpErrorCodes.InvalidParams, "Missing 'attentionId' parameter");
+                    return;
+                }
+
+                var result = await _attentionManager.AcknowledgeAsync(ackParams.AttentionId);
+                await SendResponseAsync(connection, request.Id, result);
+            }
+            catch (Exception ex)
+            {
+                await SendErrorResponseAsync(connection, request.Id,
+                    GabpErrorCodes.InternalError, $"Attention acknowledgement failed: {ex.Message}");
+            }
+        }
+
         private async Task SendResponseAsync(IConnection connection, string requestId, object result)
         {
             var response = new GabpResponse
@@ -562,6 +625,26 @@ namespace Lib.GAB.Server
         {
             _eventManager.RegisterChannel("system/status", "System status events");
             _eventManager.RegisterChannel("system/log", "System log events");
+
+            if (_attentionManager.IsEnabled)
+            {
+                _eventManager.RegisterChannel(AttentionProtocol.OpenedChannel, "Attention lifecycle events when a blocking or advisory item opens");
+                _eventManager.RegisterChannel(AttentionProtocol.UpdatedChannel, "Attention lifecycle events when the current item is updated");
+                _eventManager.RegisterChannel(AttentionProtocol.ClearedChannel, "Attention lifecycle events when the current item is cleared");
+            }
+        }
+
+        private List<string> GetSupportedProtocolMethods()
+        {
+            var methods = new List<string>(BaseProtocolMethods);
+
+            if (_attentionManager.IsEnabled)
+            {
+                methods.Add(AttentionProtocol.CurrentMethod);
+                methods.Add(AttentionProtocol.AckMethod);
+            }
+
+            return methods;
         }
 
         private void DisposeActiveSessions()
