@@ -227,18 +227,28 @@ public class RealGabsIntegrationTests : IDisposable
         // Capture output for debugging
         _ = Task.Run(async () =>
         {
-            while (!_gabsProcess.StandardOutput.EndOfStream)
+            while (true)
             {
                 var line = await _gabsProcess.StandardOutput.ReadLineAsync();
+                if (line == null)
+                {
+                    break;
+                }
+
                 _output.WriteLine($"GABS OUT: {line}");
             }
         });
 
         _ = Task.Run(async () =>
         {
-            while (!_gabsProcess.StandardError.EndOfStream)
+            while (true)
             {
                 var line = await _gabsProcess.StandardError.ReadLineAsync();
+                if (line == null)
+                {
+                    break;
+                }
+
                 _output.WriteLine($"GABS ERR: {line}");
             }
         });
@@ -388,10 +398,10 @@ public class RealGabsIntegrationTests : IDisposable
         var appDir = Path.Combine(_tempDir, "env-logger");
         Directory.CreateDirectory(appDir);
 
-        var csprojContent = @"<Project Sdk=""Microsoft.NET.Sdk"">
+        var csprojContent = $@"<Project Sdk=""Microsoft.NET.Sdk"">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>{TestProjectPaths.CurrentTargetFrameworkMoniker}</TargetFramework>
   </PropertyGroup>
 </Project>";
 
@@ -452,7 +462,7 @@ class Program
             }
         }
 
-        return Path.Combine(appDir, "bin/Release/net8.0/Program.dll");
+        return Path.Combine(appDir, "bin", "Release", TestProjectPaths.CurrentTargetFrameworkFolder, "Program.dll");
     }
 
     private async Task VerifyEnvironmentVariablesLogged()
@@ -488,16 +498,7 @@ class Program
 
     private string GetLibGabExamplePath()
     {
-        var basePath = "/home/runner/work/Lib.GAB/Lib.GAB/Lib.GAB.Example/bin";
-        var releasePath = Path.Combine(basePath, "Release/net8.0/Lib.GAB.Example.dll");
-        var debugPath = Path.Combine(basePath, "Debug/net8.0/Lib.GAB.Example.dll");
-
-        if (File.Exists(releasePath))
-            return releasePath;
-        if (File.Exists(debugPath))
-            return debugPath;
-
-        return releasePath; // Return expected path for error message
+        return TestProjectPaths.GetExampleAssemblyPath();
     }
 
     public void Dispose()

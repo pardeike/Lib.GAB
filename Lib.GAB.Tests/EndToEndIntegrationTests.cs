@@ -224,9 +224,14 @@ public class EndToEndIntegrationTests : IDisposable
         {
             try
             {
-                while (!_gabsProcess.StandardOutput.EndOfStream)
+                while (true)
                 {
                     var line = await _gabsProcess.StandardOutput.ReadLineAsync();
+                    if (line == null)
+                    {
+                        break;
+                    }
+
                     if (!string.IsNullOrEmpty(line))
                     {
                         _output.WriteLine($"GABS OUT: {line}");
@@ -243,9 +248,14 @@ public class EndToEndIntegrationTests : IDisposable
         {
             try
             {
-                while (!_gabsProcess.StandardError.EndOfStream)
+                while (true)
                 {
                     var line = await _gabsProcess.StandardError.ReadLineAsync();
+                    if (line == null)
+                    {
+                        break;
+                    }
+
                     if (!string.IsNullOrEmpty(line))
                     {
                         _output.WriteLine($"GABS ERR: {line}");
@@ -338,22 +348,7 @@ public class EndToEndIntegrationTests : IDisposable
 
     private string GetLibGabExamplePath()
     {
-        var basePath = "/home/runner/work/Lib.GAB/Lib.GAB/Lib.GAB.Example/bin";
-        var paths = new[]
-        {
-            Path.Combine(basePath, "Release/net8.0/Lib.GAB.Example.dll"),
-            Path.Combine(basePath, "Debug/net8.0/Lib.GAB.Example.dll")
-        };
-
-        foreach (var path in paths)
-        {
-            if (File.Exists(path))
-            {
-                return path;
-            }
-        }
-
-        return paths[0]; // Return first path for error messaging
+        return TestProjectPaths.GetExampleAssemblyPath();
     }
 
     public void Dispose()

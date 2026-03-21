@@ -95,18 +95,44 @@ namespace Lib.GAB.Tools
             foreach (var param in method.GetParameters())
             {
                 var paramAttr = param.GetCustomAttribute<ToolParameterAttribute>();
+                var defaultValue = GetDefaultValue(param, paramAttr);
                 
                 parameters.Add(new ToolParameterInfo
                 {
                     Name = param.Name,
                     Type = param.ParameterType,
                     Description = paramAttr?.Description,
-                    Required = paramAttr?.Required ?? !param.HasDefaultValue,
-                    DefaultValue = param.HasDefaultValue ? param.DefaultValue : null
+                    Required = IsParameterRequired(param, paramAttr),
+                    DefaultValue = defaultValue
                 });
             }
             
             return parameters;
+        }
+
+        private static bool IsParameterRequired(ParameterInfo parameter, ToolParameterAttribute parameterAttribute)
+        {
+            if (parameter.HasDefaultValue)
+            {
+                return false;
+            }
+
+            if (parameterAttribute?.DefaultValue != null)
+            {
+                return false;
+            }
+
+            return parameterAttribute?.Required ?? true;
+        }
+
+        private static object GetDefaultValue(ParameterInfo parameter, ToolParameterAttribute parameterAttribute)
+        {
+            if (parameter.HasDefaultValue)
+            {
+                return parameter.DefaultValue;
+            }
+
+            return parameterAttribute?.DefaultValue;
         }
 
         private List<ToolResponseFieldInfo> GetResponseFieldInfo(MethodInfo method)
@@ -167,7 +193,7 @@ namespace Lib.GAB.Tools
                 // Use default values
                 for (int i = 0; i < methodParams.Length; i++)
                 {
-                    paramValues[i] = methodParams[i].HasDefaultValue ? methodParams[i].DefaultValue : null;
+                    paramValues[i] = GetDefaultValue(methodParams[i], methodParams[i].GetCustomAttribute<ToolParameterAttribute>());
                 }
                 return paramValues;
             }
@@ -217,7 +243,7 @@ namespace Lib.GAB.Tools
                     }
                     catch
                     {
-                        paramValues[i] = param.HasDefaultValue ? param.DefaultValue : null;
+                        paramValues[i] = GetDefaultValue(param, param.GetCustomAttribute<ToolParameterAttribute>());
                     }
                 }
                 else if (paramDict.Keys.FirstOrDefault(k => k.Equals(param.Name, StringComparison.OrdinalIgnoreCase)) is string caseInsensitiveMatch)
@@ -231,12 +257,12 @@ namespace Lib.GAB.Tools
                     }
                     catch
                     {
-                        paramValues[i] = param.HasDefaultValue ? param.DefaultValue : null;
+                        paramValues[i] = GetDefaultValue(param, param.GetCustomAttribute<ToolParameterAttribute>());
                     }
                 }
                 else
                 {
-                    paramValues[i] = param.HasDefaultValue ? param.DefaultValue : null;
+                    paramValues[i] = GetDefaultValue(param, param.GetCustomAttribute<ToolParameterAttribute>());
                 }
             }
             

@@ -1,22 +1,23 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Lib.GAB</PackageId>
-    <Version>0.1.0</Version>
+    <Version>1.0.0</Version>
     <Authors>GABP Contributors</Authors>
-    <Description>Higher-level .NET server ergonomics for hosting a GABP endpoint.</Description>
+    <Description>Host-side GABP server library for teams embedding tool, event, and attention surfaces into game mods, automation bridges, and product-specific runtimes.</Description>
     <PackageTags>gabp;game-agent-bridge-protocol;server;modding;automation</PackageTags>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/pardeike/Lib.GAB</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>Initial stable release for host-side bridge products. Ships netstandard2.0 and net10.0 assets, adds optional attention APIs, improves tools/list metadata, and fixes optional/defaulted parameter binding.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="Gabp.Runtime" Version="0.1.0-alpha.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="Gabp.Runtime" Version="1.0.0" />
   </ItemGroup>
 
   <ItemGroup>

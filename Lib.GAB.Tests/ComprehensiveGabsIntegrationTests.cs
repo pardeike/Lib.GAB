@@ -253,23 +253,38 @@ public class ComprehensiveGabsIntegrationTests : IDisposable
         };
 
         var process = Process.Start(startInfo);
+        if (process == null)
+        {
+            throw new InvalidOperationException("Failed to start GABS server process.");
+        }
+
         _processesToCleanup.Add(process);
 
         // Capture output for debugging
         _ = Task.Run(async () =>
         {
-            while (!process.StandardOutput.EndOfStream)
+            while (true)
             {
                 var line = await process.StandardOutput.ReadLineAsync();
+                if (line == null)
+                {
+                    break;
+                }
+
                 _output.WriteLine($"GABS: {line}");
             }
         });
 
         _ = Task.Run(async () =>
         {
-            while (!process.StandardError.EndOfStream)
+            while (true)
             {
                 var line = await process.StandardError.ReadLineAsync();
+                if (line == null)
+                {
+                    break;
+                }
+
                 _output.WriteLine($"GABS ERROR: {line}");
             }
         });
@@ -418,17 +433,7 @@ public class ComprehensiveGabsIntegrationTests : IDisposable
 
     private string GetLibGabExamplePath()
     {
-        // Try Release build first, then Debug
-        var basePath = "/home/runner/work/Lib.GAB/Lib.GAB/Lib.GAB.Example/bin";
-        var releasePath = Path.Combine(basePath, "Release/net8.0/Lib.GAB.Example.dll");
-        var debugPath = Path.Combine(basePath, "Debug/net8.0/Lib.GAB.Example.dll");
-        
-        if (File.Exists(releasePath))
-            return releasePath;
-        if (File.Exists(debugPath))
-            return debugPath;
-            
-        return Path.Combine(basePath, "Release/net8.0/Lib.GAB.Example.dll"); // Return expected path for error message
+        return TestProjectPaths.GetExampleAssemblyPath();
     }
 
     private async Task<string> CreateEnvironmentTestApplication()
@@ -439,10 +444,10 @@ public class ComprehensiveGabsIntegrationTests : IDisposable
         var appPath = Path.Combine(testAppDir, "EnvTest.dll");
         
         // Create a simple test application that verifies environment variables
-        var csprojContent = @"<Project Sdk=""Microsoft.NET.Sdk"">
+        var csprojContent = $@"<Project Sdk=""Microsoft.NET.Sdk"">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>{TestProjectPaths.CurrentTargetFrameworkMoniker}</TargetFramework>
   </PropertyGroup>
 </Project>";
 
@@ -492,7 +497,7 @@ class Program
         
         await buildProcess.WaitForExitAsync();
         
-        return Path.Combine(testAppDir, "bin/Release/net8.0/EnvTest.dll");
+        return Path.Combine(testAppDir, "bin", "Release", TestProjectPaths.CurrentTargetFrameworkFolder, "EnvTest.dll");
     }
 
     public void Dispose()

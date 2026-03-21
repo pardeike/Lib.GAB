@@ -1,10 +1,31 @@
 # Lib.GAB
 
-A .NET library implementing the GABP (Game Agent Bridge Protocol) server for AI-application communication.
+A .NET library for teams embedding a GABP (Game Agent Bridge Protocol) server into their own products.
 
 ## Overview
 
-Lib.GAB provides the higher-level server ergonomics for hosting a GABP endpoint inside a game or application. It builds on the shared `Gabp.Runtime` wire-model package for canonical protocol constants and message contracts, while keeping the integration surface simple: register tools, register event channels, and start the server.
+Lib.GAB is not an end-user bridge client and not a standalone operator-facing server product. It is a host-side library for products like RimBridgeServer, custom game mods, automation bridges, and embedded control surfaces that need to expose a GABP endpoint from inside a running game or application.
+
+It builds on the shared `Gabp.Runtime` wire-model package for canonical protocol constants and message contracts, while keeping the integration surface simple: register tools, register event channels, publish optional attention, and start the server.
+
+For the 1.0.0 release highlights and upgrade notes, see [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
+
+## Who This Is For
+
+Use Lib.GAB if you are building a product that needs to:
+
+- expose product- or game-specific tools over GABP
+- aggregate tools contributed by multiple mods, plugins, or assemblies into one bridge surface
+- advertise structured tool metadata to downstream bridges and agents
+- emit events and optional blocking attention from inside the host process
+- run inside environments such as Unity/Mono, .NET Framework, or modern .NET hosts
+
+Lib.GAB is the transport and host ergonomics layer. Your product still owns its own domain behavior:
+
+- capability design and naming
+- game or application state access
+- logging, diagnostics, and attention policy
+- packaging and deployment into the final host product
 
 ## Installation
 
@@ -12,7 +33,40 @@ Lib.GAB provides the higher-level server ergonomics for hosting a GABP endpoint 
 dotnet add package Lib.GAB
 ```
 
-`Lib.GAB` brings in `Gabp.Runtime` transitively, so consumers do not need a separate direct package reference to the runtime package.
+Reference it from the host-side component that actually exposes your GABP endpoint. `Lib.GAB` brings in `Gabp.Runtime` transitively, so consumers do not need a separate direct package reference to the runtime package.
+
+## 5-Minute Hello World
+
+If you just want to prove the flow end to end, start with the minimal sample in [`Lib.GAB.Example/Program.cs`](Lib.GAB.Example/Program.cs).
+
+From a fresh clone:
+
+```bash
+dotnet run --project Lib.GAB.Example
+```
+
+That sample is intentionally small:
+
+- one top-level host flow in `Program.cs`
+- two tools: `hello/ping` and `hello/echo`
+- one event channel: `host/lifecycle`
+- one server creation path: `Gabp.CreateGabsAwareServerWithInstance(...)`
+- two tiny helper methods for banner output and lifecycle event emission
+
+Why this is the recommended starting point:
+
+- it runs standalone, so you get an immediate success path without game-specific plumbing
+- it also runs under GABS without code changes, because `CreateGabsAwareServerWithInstance(...)` picks up `GABS_GAME_ID`, `GABP_SERVER_PORT`, and `GABP_TOKEN` automatically
+- the top-level flow can be copied into a Unity mod, a .NET Framework host, or any other .NET process and then adapted to whatever startup hook that product already has
+
+When you run it manually, it prints the port and token you need for a direct bridge connection. When GABS launches it, the same code uses the GABS-provided configuration instead.
+
+If you are embedding into an existing game or app, the first adaptation is usually just:
+
+1. Copy the `Program.cs` server setup and the `HelloWorldTools` class into your project.
+2. Move the `CreateGabsAwareServerWithInstance(...)` and `RegisterChannel(...)` lines into your existing startup hook.
+3. Keep the same `StartAsync()` and `StopAsync()` calls, but wire them into your product lifecycle instead of `Console.ReadLine()`.
+4. Replace `hello/ping` and `hello/echo` with product-specific tools.
 
 ## Features
 
@@ -25,24 +79,44 @@ dotnet add package Lib.GAB
 - **Session Management**: Token-based authentication and capability negotiation
 - **Shared Runtime Types**: Reuses `Gabp.Runtime` for protocol constants and request models
 - **Easy Integration**: Simple API for quick setup and customization
-- **Wide Compatibility**: Targets .NET Standard 2.0
+- **Runtime Compatibility**: Ships `netstandard2.0` and `net10.0` assets, including Unity/Mono-based hosts such as RimWorld
+
+## Product Builder Notes
+
+If you are building a product in the style of RimBridgeServer, Lib.GAB gives you the host-facing mechanics:
+
+- session establishment and authentication token handling
+- canonical `session/hello`, `tools/list`, and `tools/call` behavior
+- event subscription and event emission
+- optional attention lifecycle endpoints and events
+- attribute-driven or manual tool registration
+
+Typical responsibilities you keep in your own product:
+
+- mapping game or application operations into stable tool aliases
+- discovering and vetting tools contributed by other mods, plugins, or extension assemblies
+- deciding which async failures should open or clear attention
+- deciding how much result metadata to expose through `ResultDescription` and `[ToolResponse]`
+- integrating with your own launcher, bridge supervisor, or orchestration layer
+
+If your product works like RimBridgeServer and republishes tools from other mods, that is a good fit for Lib.GAB. The library exposes the final host-side GABP surface, while your product still owns extension discovery, trust boundaries, naming rules, and lifecycle management for those contributed tools.
 
 ## GABS Integration
 
-Lib.GAB seamlessly integrates with [GABS](https://github.com/pardeike/GABS) (Game Agent Bridge Server) for AI-controlled gaming experiences.
+Lib.GAB integrates with [GABS](https://github.com/pardeike/GABS) (Game Agent Bridge Server) when your host product is launched under a supervising bridge/orchestration environment.
 
 ### Automatic GABS Detection
 
-When your game is launched by GABS, Lib.GAB automatically detects the GABS environment and configures itself appropriately:
+When your host process is launched by GABS, Lib.GAB automatically detects the GABS environment and configures itself appropriately:
 
 ```csharp
 // Automatically detects and uses GABS configuration if available
 // Falls back to standard configuration if not running under GABS
-var server = Gabp.CreateGabsAwareServer("My Game", "1.0.0");
+var server = Gabp.CreateGabsAwareServer("My Host Product", "1.0.0");
 
 // With tools from a class instance
-var gameTools = new GameTools();
-var server = Gabp.CreateGabsAwareServerWithInstance("My Game", "1.0.0", gameTools);
+var hostTools = new HostTools();
+var server = Gabp.CreateGabsAwareServerWithInstance("My Host Product", "1.0.0", hostTools);
 
 await server.StartAsync();
 ```
@@ -51,7 +125,7 @@ await server.StartAsync();
 
 GABS provides configuration through environment variables:
 - `GABS_GAME_ID`: Game identifier from GABS configuration
-- `GABP_SERVER_PORT`: Port your mod should listen on as GABP server
+- `GABP_SERVER_PORT`: Port your host should listen on as a GABP server
 - `GABP_TOKEN`: Authentication token for GABS connections
 
 ### Checking GABS Environment
@@ -63,13 +137,13 @@ if (Gabp.IsRunningUnderGabs())
 {
     Console.WriteLine("Running under GABS control");
     // Use GABS-aware server creation
-    var server = Gabp.CreateGabsAwareServer("My Game", "1.0.0");
+    var server = Gabp.CreateGabsAwareServer("My Host Product", "1.0.0");
 }
 else
 {
     Console.WriteLine("Running standalone");
     // Use traditional server creation
-    var server = Gabp.CreateSimpleServer("My Game", "1.0.0");
+    var server = Gabp.CreateSimpleServer("My Host Product", "1.0.0");
 }
 ```
 
@@ -83,12 +157,12 @@ var gameId = Environment.GetEnvironmentVariable("GABS_GAME_ID");
 var port = int.Parse(Environment.GetEnvironmentVariable("GABP_SERVER_PORT"));
 var token = Environment.GetEnvironmentVariable("GABP_TOKEN");
 
-var server = Gabp.CreateServerWithExternalConfig("My Game", "1.0.0", port, token, gameId);
+var server = Gabp.CreateServerWithExternalConfig("My Host Product", "1.0.0", port, token, gameId);
 ```
 
 ### Practical Usage Example
 
-Here's how to use Lib.GAB in a game mod that should work both standalone and with GABS:
+Here is a host-side integration example for a bridge product that should work both standalone and with GABS:
 
 ```csharp
 using System;
@@ -96,14 +170,14 @@ using System.Threading.Tasks;
 using Lib.GAB;
 using Lib.GAB.Tools;
 
-public class GameMod
+public class EmbeddedBridgeHost
 {
     private GabpServer _server;
 
     public async Task InitializeAsync()
     {
-        // Create server that automatically adapts to the environment
-        _server = Gabp.CreateGabsAwareServerWithInstance("My Game Mod", "1.0.0", this);
+        // Create a bridge host that automatically adapts to the environment
+        _server = Gabp.CreateGabsAwareServerWithInstance("My Embedded Bridge", "1.0.0", this);
         
         // Register event channels
         _server.Events.RegisterChannel("player/move", "Player movement events");
@@ -113,11 +187,11 @@ public class GameMod
         
         if (Gabp.IsRunningUnderGabs())
         {
-            Console.WriteLine($"Game mod connected to GABS on port {_server.Port}");
+            Console.WriteLine($"Embedded bridge connected to GABS on port {_server.Port}");
         }
         else
         {
-            Console.WriteLine($"Game mod running standalone on port {_server.Port}");
+            Console.WriteLine($"Embedded bridge running standalone on port {_server.Port}");
             Console.WriteLine($"Bridge token: {_server.Token}");
         }
     }
@@ -129,7 +203,7 @@ public class GameMod
         [ToolParameter(Description = "Y coordinate")] double y,
         [ToolParameter(Description = "Z coordinate")] double z)
     {
-        // Your game-specific teleport logic here
+        // Your product-specific or game-specific operation here
         await Game.TeleportPlayerAsync(player, x, y, z);
         
         // Notify about the teleport
@@ -156,16 +230,16 @@ public class GameMod
 
 ## Quick Start
 
-For applications that manage their own configuration:
+For products that manage their own configuration:
 
 ```csharp
 using Lib.GAB;
 
-// Create a simple server
-var server = Gabp.CreateSimpleServer("My Application", "1.0.0");
+// Create a host-side GABP server
+var server = Gabp.CreateSimpleServer("My Host Product", "1.0.0");
 
 // Register a tool manually
-server.Tools.RegisterTool("app/status", _ => Task.FromResult<object>(new
+server.Tools.RegisterTool("host/status", _ => Task.FromResult<object>(new
 {
     status = "running",
     timestamp = DateTime.UtcNow
@@ -187,7 +261,7 @@ await server.StopAsync();
 using Lib.GAB;
 using Lib.GAB.Tools;
 
-public class ApplicationTools
+public class HostTools
 {
     [Tool("data/get", Description = "Get application data", ResultDescription = "The requested identifier and its resolved value.")]
     [ToolResponse("dataId", Type = "string", Description = "Requested data identifier")]
@@ -210,8 +284,8 @@ public class ApplicationTools
 }
 
 // Register tools from a class instance
-var appTools = new ApplicationTools();
-var server = Gabp.CreateServerWithInstance("My Application", "1.0.0", appTools);
+var hostTools = new HostTools();
+var server = Gabp.CreateServerWithInstance("My Host Product", "1.0.0", hostTools);
 await server.StartAsync();
 ```
 
@@ -246,11 +320,11 @@ For many tools, `ResultDescription` is enough by itself. Field-level response me
 
 ```csharp
 // Register event channels
-server.Events.RegisterChannel("app/status_change", "Application status events");
+server.Events.RegisterChannel("host/status_change", "Host status events");
 server.Events.RegisterChannel("data/update", "Data update events");
 
 // Emit events
-await server.Events.EmitEventAsync("app/status_change", new
+await server.Events.EmitEventAsync("host/status_change", new
 {
     status = "ready",
     timestamp = DateTime.UtcNow
@@ -259,7 +333,7 @@ await server.Events.EmitEventAsync("app/status_change", new
 
 ## Optional Attention Support
 
-Enable attention support when your integration needs to surface important async game state that the bridge must acknowledge before continuing. When enabled, Lib.GAB adds:
+Enable attention support when your product needs to surface important async host state that the bridge must acknowledge before continuing. When enabled, Lib.GAB adds:
 
 - `attention/current`
 - `attention/ack`
@@ -272,7 +346,7 @@ using Lib.GAB;
 using Lib.GAB.Attention;
 
 var server = Gabp.CreateServer()
-    .UseAppInfo("My Game", "1.0.0")
+    .UseAppInfo("My Host Product", "1.0.0")
     .UseGabsEnvironmentIfAvailable()
     .EnableAttentionSupport()
     .Build();
@@ -294,7 +368,7 @@ await server.Attention.PublishAsync(new AttentionItem
 
 Use the same `attentionId` when updating an existing item. Acknowledging the matching item through `attention/ack` clears it and emits `attention/cleared`.
 
-Most tool authors do not need direct attention logic. The usual pattern is:
+Most tool authors do not need direct attention logic. The usual pattern in an embedded bridge product is:
 
 - normal tool code returns ordinary success or failure results
 - the integration layer decides which async logs or operation failures should open attention
@@ -311,10 +385,22 @@ The main server class that handles GABP connections and protocol implementation.
 - `Token`: The authentication token for bridge connections
 - `Tools`: Tool registry for managing available tools
 - `Events`: Event manager for broadcasting events
+- `Attention`: Attention manager for optional blocking/advisory attention state
 
 **Methods:**
 - `StartAsync()`: Start the server and begin listening for connections
 - `StopAsync()`: Stop the server and close all connections
+
+### Server Builder
+
+```csharp
+var server = Gabp.CreateServer()
+    .UseAppInfo("My Host Product", "1.0.0")
+    .UsePort(51000)
+    .UseToken("secret-token")
+    .EnableAttentionSupport()
+    .Build();
+```
 
 ### Tool Registration
 
@@ -363,25 +449,25 @@ Lib.GAB implements GABP 1.0 specification including:
 
 - **Message Format**: JSON-RPC-inspired request/response/event messages
 - **Transport**: LSP-style framing over TCP connections
-- **Authentication**: Token-based authentication with config file
+- **Authentication**: Token-based authentication between bridge and host
 - **Core Methods**: `session/hello`, `tools/list`, `tools/call`, `events/subscribe`, `events/unsubscribe`
+- **Optional Attention Methods**: `attention/current` and `attention/ack` when enabled
 - **Error Handling**: Standard GABP error codes
-- **Capability Negotiation**: Advertising available tools and events
+- **Capability Negotiation**: Advertising supported protocol methods and event channels
 
 ## Example
 
-See `Lib.GAB.Example` for a complete working example showing:
-- Tool registration with attributes
-- Event channel setup
-- Event broadcasting
-- Server lifecycle management
+See [`Lib.GAB.Example/Program.cs`](Lib.GAB.Example/Program.cs) for the minimal working host that this README recommends as the first integration step. It shows:
+
+- a single-file host flow you can copy into an existing product
+- GABS-aware startup with standalone fallback
+- a minimal tool surface with `hello/ping` and `hello/echo`
+- one event channel and a small lifecycle event flow
 
 ## Requirements
 
-- **.NET Standard 2.0** compatible runtime:
-  - .NET Framework 4.7.2 or later
-  - .NET Core 2.0 or later
-  - .NET 5.0 or later
+- **Preferred SDK for development and CI**: .NET 10
+- **Runtime compatibility**: any host that supports .NET Standard 2.0, including Unity/Mono-based games such as RimWorld
 - Windows, macOS, or Linux
 
 ## License

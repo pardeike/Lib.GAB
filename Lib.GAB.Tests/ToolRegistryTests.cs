@@ -66,6 +66,30 @@ public class ToolRegistryTests
         Assert.Equal("Returns the sum of the two inputs as an integer.", tool.ResultDescription);
     }
 
+    [Fact]
+    public void OptionalMethodParametersRemainOptionalInToolMetadata()
+    {
+        var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new OptionalParameterTestTools());
+
+        var tool = Assert.Single(server.Tools.GetTools());
+        var optional = Assert.Single(tool.Parameters, parameter => parameter.Name == "message");
+
+        Assert.False(optional.Required);
+        Assert.Equal("fallback", optional.DefaultValue);
+    }
+
+    [Fact]
+    public async Task UsesToolParameterAttributeDefaultValueWhenArgumentIsMissing()
+    {
+        var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new AttributeDefaultValueTestTools());
+
+        var result = await server.Tools.CallToolAsync("math/increment", new { });
+
+        Assert.Equal(11, result);
+    }
+
     private static string CaptureTraceOutput(Action action)
     {
         lock (TraceLock)
@@ -97,6 +121,24 @@ public class ToolRegistryTests
             [ToolParameter(Description = "Second number")] int b)
         {
             return a + b;
+        }
+    }
+
+    public class OptionalParameterTestTools
+    {
+        [Tool("system/echo", Description = "Echo text with an optional suffix")]
+        public string Echo([ToolParameter(Description = "Base message")] string message = "fallback")
+        {
+            return message;
+        }
+    }
+
+    public class AttributeDefaultValueTestTools
+    {
+        [Tool("math/increment", Description = "Increment a number using attribute-level defaults")]
+        public int Increment([ToolParameter(Description = "Value to increment", Required = false, DefaultValue = 10)] int value)
+        {
+            return value + 1;
         }
     }
 }
