@@ -90,6 +90,40 @@ public class ToolRegistryTests
         Assert.Equal(11, result);
     }
 
+    [Fact]
+    public void AcceptsCanonicalSlashToolNames()
+    {
+        var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+
+        server.Tools.RegisterTool("rimbridge/core_ping", _ => Task.FromResult<object>("ok"));
+
+        Assert.True(server.Tools.HasTool("rimbridge/core_ping"));
+    }
+
+    [Theory]
+    [InlineData("rimbridge.core.ping")]
+    [InlineData("rimbridge/core.ping")]
+    [InlineData("rimbridge_core_ping")]
+    [InlineData("RimBridge/core_ping")]
+    [InlineData("rimbridge")]
+    public void RejectsNonCanonicalToolNamesForManualRegistration(string name)
+    {
+        var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            server.Tools.RegisterTool(name, _ => Task.FromResult<object>("ok")));
+
+        Assert.Contains(ToolNameValidator.CanonicalPattern, exception.Message);
+    }
+
+    [Fact]
+    public void RejectsNonCanonicalToolNamesForAttributes()
+    {
+        var exception = Assert.Throws<ArgumentException>(() => new ToolAttribute("rimbridge.core.ping"));
+
+        Assert.Contains(ToolNameValidator.CanonicalPattern, exception.Message);
+    }
+
     private static string CaptureTraceOutput(Action action)
     {
         lock (TraceLock)

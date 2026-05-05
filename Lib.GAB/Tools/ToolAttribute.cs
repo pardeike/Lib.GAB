@@ -37,9 +37,7 @@ namespace Lib.GAB.Tools
 
         public ToolAttribute(string name)
         {
-            if (string.IsNullOrWhiteSpace(name))
-                throw new ArgumentException("Tool name cannot be null or empty", nameof(name));
-            
+            ToolNameValidator.EnsureValid(name, nameof(name));
             Name = name;
         }
     }

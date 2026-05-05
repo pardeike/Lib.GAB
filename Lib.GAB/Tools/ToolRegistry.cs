@@ -24,9 +24,8 @@ namespace Lib.GAB.Tools
 
         public void RegisterTool(string name, Func<object, Task<object>> handler, ToolInfo info = null)
         {
-            if (string.IsNullOrWhiteSpace(name))
-                throw new ArgumentException("Tool name cannot be null or empty", nameof(name));
-            
+            ToolNameValidator.EnsureValid(name, nameof(name));
+
             if (handler == null)
                 throw new ArgumentNullException(nameof(handler));
 
