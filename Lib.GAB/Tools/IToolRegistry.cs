@@ -31,6 +31,11 @@ namespace Lib.GAB.Tools
         public string ResultDescription { get; set; }
 
         /// <summary>
+        /// Optional machine-readable classification tags for bridge clients.
+        /// </summary>
+        public List<string> Tags { get; set; } = new List<string>();
+
+        /// <summary>
         /// Parameter information
         /// </summary>
         public List<ToolParameterInfo> Parameters { get; set; } = new List<ToolParameterInfo>();

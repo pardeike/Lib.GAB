@@ -286,25 +286,35 @@ namespace Lib.GAB.Server
 
         private async Task HandleToolsListAsync(IConnection connection, GabpRequest request)
         {
-            var tools = _toolRegistry.GetTools().Select(t => new
-            {
-                name = t.Name,
-                title = string.IsNullOrWhiteSpace(t.Title) ? BuildToolTitle(t.Name) : t.Title,
-                description = t.Description,
-                inputSchema = BuildInputSchema(t.Parameters),
-                parameters = t.Parameters.Select(p => new
-                {
-                    name = p.Name,
-                    type = p.Type.Name,
-                    description = p.Description,
-                    required = p.Required,
-                    defaultValue = p.DefaultValue
-                }).ToList(),
-                outputSchema = BuildOutputSchema(t.ResultDescription, t.ResponseFields),
-                requiresAuth = t.RequiresAuth
-            }).ToList();
+            var tools = _toolRegistry.GetTools().Select(BuildToolDescriptor).ToList();
 
             await SendResponseAsync(connection, request.Id, new { tools });
+        }
+
+        private static Dictionary<string, object> BuildToolDescriptor(ToolInfo tool)
+        {
+            var descriptor = new Dictionary<string, object>
+            {
+                ["name"] = tool.Name,
+                ["title"] = string.IsNullOrWhiteSpace(tool.Title) ? BuildToolTitle(tool.Name) : tool.Title,
+                ["description"] = tool.Description,
+                ["inputSchema"] = BuildInputSchema(tool.Parameters),
+                ["parameters"] = tool.Parameters.Select(parameter => new
+                {
+                    name = parameter.Name,
+                    type = parameter.Type.Name,
+                    description = parameter.Description,
+                    required = parameter.Required,
+                    defaultValue = parameter.DefaultValue
+                }).ToList(),
+                ["outputSchema"] = BuildOutputSchema(tool.ResultDescription, tool.ResponseFields),
+                ["requiresAuth"] = tool.RequiresAuth
+            };
+
+            if (tool.Tags != null && tool.Tags.Count > 0)
+                descriptor["tags"] = tool.Tags;
+
+            return descriptor;
         }
 
         private static Dictionary<string, object> BuildInputSchema(List<ToolParameterInfo> parameters)

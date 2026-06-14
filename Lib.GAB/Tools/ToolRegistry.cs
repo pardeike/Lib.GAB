@@ -78,6 +78,7 @@ namespace Lib.GAB.Tools
                     Title = toolAttr.Title,
                     Description = toolAttr.Description,
                     ResultDescription = toolAttr.ResultDescription,
+                    Tags = NormalizeTags(toolAttr.Tags),
                     RequiresAuth = toolAttr.RequiresAuth,
                     Parameters = GetParameterInfo(method),
                     ResponseFields = GetResponseFieldInfo(method)
@@ -85,6 +86,18 @@ namespace Lib.GAB.Tools
 
                 RegisterTool(toolAttr.Name, CreateHandler(method, instance), toolInfo);
             }
+        }
+
+        private static List<string> NormalizeTags(IEnumerable<string> tags)
+        {
+            if (tags == null)
+                return new List<string>();
+
+            return tags
+                .Where(tag => !string.IsNullOrWhiteSpace(tag))
+                .Select(tag => tag.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         private List<ToolParameterInfo> GetParameterInfo(MethodInfo method)

@@ -195,6 +195,8 @@ public class GabpServerTransportTests
             Assert.True(tool.TryGetProperty("outputSchema", out var outputSchema));
             Assert.Equal(JsonValueKind.Object, outputSchema.ValueKind);
             Assert.Equal("Returns the sum of the two inputs as an integer.", outputSchema.GetProperty("description").GetString());
+            Assert.True(tool.TryGetProperty("tags", out var tags));
+            Assert.Equal(new[] { "diagnostic", "read-only" }, tags.EnumerateArray().Select(tag => tag.GetString()).ToArray());
             Assert.True(tool.TryGetProperty("requiresAuth", out var requiresAuth));
             Assert.True(requiresAuth.GetBoolean());
         }
@@ -629,7 +631,7 @@ public class GabpServerTransportTests
 
     private sealed class TransportTestTools
     {
-        [Tool("math/add", Title = "Add Numbers", Description = "Add two numbers", ResultDescription = "Returns the sum of the two inputs as an integer.")]
+        [Tool("math/add", Title = "Add Numbers", Description = "Add two numbers", ResultDescription = "Returns the sum of the two inputs as an integer.", Tags = new[] { "diagnostic", "read-only" })]
         public int Add(
             [ToolParameter(Description = "First number")] int a,
             [ToolParameter(Description = "Second number")] int b)

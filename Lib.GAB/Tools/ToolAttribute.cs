@@ -31,6 +31,11 @@ namespace Lib.GAB.Tools
         public string ResultDescription { get; set; }
 
         /// <summary>
+        /// Optional machine-readable classification tags emitted in tools/list.
+        /// </summary>
+        public string[] Tags { get; set; } = Array.Empty<string>();
+
+        /// <summary>
         /// Whether this tool requires authentication
         /// </summary>
         public bool RequiresAuth { get; set; } = true;

@@ -67,6 +67,17 @@ public class ToolRegistryTests
     }
 
     [Fact]
+    public void CapturesOptionalTagsFromToolMetadata()
+    {
+        var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new TaggedTestTools());
+
+        var tool = Assert.Single(server.Tools.GetTools());
+
+        Assert.Equal(new[] { "diagnostic", "read-only" }, tool.Tags);
+    }
+
+    [Fact]
     public void OptionalMethodParametersRemainOptionalInToolMetadata()
     {
         var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
@@ -173,6 +184,15 @@ public class ToolRegistryTests
         public int Increment([ToolParameter(Description = "Value to increment", Required = false, DefaultValue = 10)] int value)
         {
             return value + 1;
+        }
+    }
+
+    public class TaggedTestTools
+    {
+        [Tool("diagnostics/status", Description = "Read status", Tags = new[] { "diagnostic", "read-only" })]
+        public object Status()
+        {
+            return new { ok = true };
         }
     }
 }

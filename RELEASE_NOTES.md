@@ -1,5 +1,15 @@
 # Release Notes
 
+## 1.0.2
+
+This release lets bridge hosts publish simple machine-readable tool tags.
+
+### Highlights
+
+- Tools can now declare optional tags through `ToolAttribute.Tags` or `ToolInfo.Tags`.
+- `tools/list` includes non-empty `tags` arrays so clients can discover diagnostic, lifecycle, status, and read-only tools without hardcoded names.
+- Existing tools keep the same call behavior and do not need source changes.
+
 ## 1.0.0
 
 This release is aimed at engineers building host-side bridge products, not end users.
