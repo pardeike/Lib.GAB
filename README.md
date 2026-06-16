@@ -128,6 +128,11 @@ GABS provides configuration through environment variables:
 - `GABP_SERVER_PORT`: Port your host should listen on as a GABP server
 - `GABP_TOKEN`: Authentication token for GABS connections
 
+`GABP_SERVER_PORT` and `GABP_TOKEN` are required for automatic GABS-aware
+configuration. Lib.GAB intentionally does not read `GABS_BRIDGE_PATH` or
+`~/.gabs/<gameId>/bridge.json`; those files are GABS-owned internal/debug state,
+not host-side runtime configuration.
+
 ### Checking GABS Environment
 
 You can check if your application is running under GABS:

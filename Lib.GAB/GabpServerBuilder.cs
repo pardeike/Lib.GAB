@@ -72,7 +72,7 @@ namespace Lib.GAB
 
 
         /// <summary>
-        /// Set the port and authentication token from external configuration (e.g., from GABS bridge file)
+        /// Set the port and authentication token from external configuration
         /// </summary>
         /// <param name="port">The port to listen on</param>
         /// <param name="token">The authentication token</param>
@@ -100,9 +100,9 @@ namespace Lib.GAB
         }
 
         /// <summary>
-        /// Automatically configure from GABS environment variables if present
+        /// Automatically configure from GABS environment variables when present
         /// </summary>
-        /// <returns>The builder instance for method chaining, or null if GABS environment variables are not found</returns>
+        /// <returns>The builder instance for method chaining</returns>
         public GabpServerBuilder UseGabsEnvironmentIfAvailable()
         {
             var gabsConfig = TryReadGabsEnvironment();
@@ -129,7 +129,8 @@ namespace Lib.GAB
             var token = Environment.GetEnvironmentVariable("GABP_TOKEN");
 
             if (!string.IsNullOrEmpty(portStr) && !string.IsNullOrEmpty(token) &&
-                int.TryParse(portStr, out int port))
+                int.TryParse(portStr, out int port) &&
+                port > 0 && port <= 65535)
             {
                 return new GabsEnvironmentConfig
                 {
@@ -140,6 +141,11 @@ namespace Lib.GAB
             }
 
             return null;
+        }
+
+        internal static bool HasGabsConfiguration()
+        {
+            return TryReadGabsEnvironment() != null;
         }
 
         /// <summary>
@@ -239,7 +245,7 @@ namespace Lib.GAB
         }
 
         /// <summary>
-        /// Create a GABP server with external configuration (port and token from GABS bridge)
+        /// Create a GABP server with external configuration (port and token)
         /// </summary>
         /// <param name="appName">Application name</param>
         /// <param name="appVersion">Application version</param>
@@ -255,7 +261,7 @@ namespace Lib.GAB
         }
 
         /// <summary>
-        /// Create a GABP server with external configuration (port, token, and game ID from GABS bridge)
+        /// Create a GABP server with external configuration (port, token, and game ID)
         /// </summary>
         /// <param name="appName">Application name</param>
         /// <param name="appVersion">Application version</param>
@@ -272,30 +278,30 @@ namespace Lib.GAB
         }
 
         /// <summary>
-        /// Create a GABP server that automatically detects GABS environment variables
-        /// Falls back to standard configuration if GABS environment is not detected
+        /// Create a GABP server that automatically detects GABS configuration
+        /// Falls back to standard configuration if GABS configuration is not detected
         /// </summary>
         /// <param name="appName">Application name</param>
         /// <param name="appVersion">Application version</param>
-        /// <param name="fallbackPort">Port to use if GABS environment is not detected (0 for automatic)</param>
+        /// <param name="fallbackPort">Port to use if GABS configuration is not detected (0 for automatic)</param>
         /// <returns>Configured GABP server</returns>
         public static GabpServer CreateGabsAwareServer(string appName, string appVersion, int fallbackPort = 0)
         {
             return CreateServer()
                 .UseAppInfo(appName, appVersion)
                 .UseGabsEnvironmentIfAvailable()
-                .UsePortIfNotSet(fallbackPort) // Only used if GABS environment wasn't detected
+                .UsePortIfNotSet(fallbackPort) // Only used if GABS configuration wasn't detected
                 .Build();
         }
 
         /// <summary>
-        /// Create a GABP server that automatically detects GABS environment variables and registers tools from an instance
-        /// Falls back to standard configuration if GABS environment is not detected
+        /// Create a GABP server that automatically detects GABS configuration and registers tools from an instance
+        /// Falls back to standard configuration if GABS configuration is not detected
         /// </summary>
         /// <param name="appName">Application name</param>
         /// <param name="appVersion">Application version</param>
         /// <param name="instance">Object instance containing tools marked with [Tool] attributes</param>
-        /// <param name="fallbackPort">Port to use if GABS environment is not detected (0 for automatic)</param>
+        /// <param name="fallbackPort">Port to use if GABS configuration is not detected (0 for automatic)</param>
         /// <returns>Configured GABP server with registered tools</returns>
         public static GabpServer CreateGabsAwareServerWithInstance(string appName, string appVersion, object instance, int fallbackPort = 0)
         {
@@ -305,17 +311,12 @@ namespace Lib.GAB
         }
 
         /// <summary>
-        /// Check if the current environment has GABS configuration
+        /// Check if the current process has GABS configuration
         /// </summary>
-        /// <returns>True if GABS environment variables are detected</returns>
+        /// <returns>True if required GABS environment variables are detected</returns>
         public static bool IsRunningUnderGabs()
         {
-            var gameId = Environment.GetEnvironmentVariable("GABS_GAME_ID");
-            var portStr = Environment.GetEnvironmentVariable("GABP_SERVER_PORT");
-            var token = Environment.GetEnvironmentVariable("GABP_TOKEN");
-
-            return !string.IsNullOrEmpty(portStr) && !string.IsNullOrEmpty(token) &&
-                   int.TryParse(portStr, out _);
+            return GabpServerBuilder.HasGabsConfiguration();
         }
     }
 }

@@ -4,7 +4,7 @@
     <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Lib.GAB</PackageId>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
     <Authors>GABP Contributors</Authors>
     <Description>Host-side GABP server library for teams embedding tool, event, and attention surfaces into game mods, automation bridges, and product-specific runtimes.</Description>
     <PackageTags>gabp;game-agent-bridge-protocol;server;modding;automation</PackageTags>
@@ -12,7 +12,7 @@
     <RepositoryUrl>https://github.com/pardeike/Lib.GAB</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>Add optional tool tags in metadata and tools/list so bridge clients can consume generic diagnostic, lifecycle, and read-only classifications.</PackageReleaseNotes>
+    <PackageReleaseNotes>Harden GABS-aware startup to use only the live environment contract, with validated endpoint ports and no bridge-file fallback.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>

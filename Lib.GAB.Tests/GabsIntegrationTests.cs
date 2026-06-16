@@ -1,9 +1,13 @@
 using System;
+using System.IO;
+using System.Net;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using Lib.GAB.Tools;
 
 namespace Lib.GAB.Tests;
 
+[Collection("GabsEnvironment")]
 public class GabsIntegrationTests
 {
     [Fact]
@@ -13,6 +17,7 @@ public class GabsIntegrationTests
         Environment.SetEnvironmentVariable("GABS_GAME_ID", null);
         Environment.SetEnvironmentVariable("GABP_SERVER_PORT", null);
         Environment.SetEnvironmentVariable("GABP_TOKEN", null);
+        Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
 
         // Act
         var result = Gabp.IsRunningUnderGabs();
@@ -30,6 +35,7 @@ public class GabsIntegrationTests
             Environment.SetEnvironmentVariable("GABS_GAME_ID", "test-game");
             Environment.SetEnvironmentVariable("GABP_SERVER_PORT", "12345");
             Environment.SetEnvironmentVariable("GABP_TOKEN", "test-token");
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
 
             // Act
             var result = Gabp.IsRunningUnderGabs();
@@ -43,6 +49,7 @@ public class GabsIntegrationTests
             Environment.SetEnvironmentVariable("GABS_GAME_ID", null);
             Environment.SetEnvironmentVariable("GABP_SERVER_PORT", null);
             Environment.SetEnvironmentVariable("GABP_TOKEN", null);
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
         }
     }
 
@@ -52,9 +59,10 @@ public class GabsIntegrationTests
         try
         {
             // Arrange
-            Environment.SetEnvironmentVariable("GABS_GAME_ID", "test-game");
+            Environment.SetEnvironmentVariable("GABS_GAME_ID", "invalid-port-" + Guid.NewGuid().ToString("N"));
             Environment.SetEnvironmentVariable("GABP_SERVER_PORT", "not-a-number");
             Environment.SetEnvironmentVariable("GABP_TOKEN", "test-token");
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
 
             // Act
             var result = Gabp.IsRunningUnderGabs();
@@ -68,6 +76,32 @@ public class GabsIntegrationTests
             Environment.SetEnvironmentVariable("GABS_GAME_ID", null);
             Environment.SetEnvironmentVariable("GABP_SERVER_PORT", null);
             Environment.SetEnvironmentVariable("GABP_TOKEN", null);
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
+        }
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("65536")]
+    public void IsRunningUnderGabs_ReturnsFalse_WhenPortIsOutOfRange(string port)
+    {
+        try
+        {
+            Environment.SetEnvironmentVariable("GABS_GAME_ID", "invalid-port-" + Guid.NewGuid().ToString("N"));
+            Environment.SetEnvironmentVariable("GABP_SERVER_PORT", port);
+            Environment.SetEnvironmentVariable("GABP_TOKEN", "test-token");
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
+
+            var result = Gabp.IsRunningUnderGabs();
+
+            Assert.False(result);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GABS_GAME_ID", null);
+            Environment.SetEnvironmentVariable("GABP_SERVER_PORT", null);
+            Environment.SetEnvironmentVariable("GABP_TOKEN", null);
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
         }
     }
 
@@ -80,6 +114,7 @@ public class GabsIntegrationTests
             Environment.SetEnvironmentVariable("GABS_GAME_ID", "test-game");
             Environment.SetEnvironmentVariable("GABP_SERVER_PORT", "12345");
             Environment.SetEnvironmentVariable("GABP_TOKEN", "test-token");
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
 
             // Act
             var server = Gabp.CreateGabsAwareServer("Test App", "1.0.0", fallbackPort: 9999);
@@ -98,6 +133,7 @@ public class GabsIntegrationTests
             Environment.SetEnvironmentVariable("GABS_GAME_ID", null);
             Environment.SetEnvironmentVariable("GABP_SERVER_PORT", null);
             Environment.SetEnvironmentVariable("GABP_TOKEN", null);
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
         }
     }
 
@@ -108,6 +144,7 @@ public class GabsIntegrationTests
         Environment.SetEnvironmentVariable("GABS_GAME_ID", null);
         Environment.SetEnvironmentVariable("GABP_SERVER_PORT", null);
         Environment.SetEnvironmentVariable("GABP_TOKEN", null);
+        Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
 
         // Act
         var server = Gabp.CreateGabsAwareServer("Test App", "1.0.0", fallbackPort: 9999);
@@ -130,6 +167,7 @@ public class GabsIntegrationTests
             Environment.SetEnvironmentVariable("GABS_GAME_ID", "test-game");
             Environment.SetEnvironmentVariable("GABP_SERVER_PORT", "12345");
             Environment.SetEnvironmentVariable("GABP_TOKEN", "test-token");
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
 
             var toolsInstance = new TestTools();
 
@@ -153,6 +191,70 @@ public class GabsIntegrationTests
             Environment.SetEnvironmentVariable("GABS_GAME_ID", null);
             Environment.SetEnvironmentVariable("GABP_SERVER_PORT", null);
             Environment.SetEnvironmentVariable("GABP_TOKEN", null);
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
+        }
+    }
+
+    [Fact]
+    public async Task CreateGabsAwareServer_IgnoresBridgePath_WhenEnvironmentPortAndTokenAreMissing()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "libgab-bridge-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var bridgePath = Path.Combine(tempDir, "bridge.json");
+        var port = GetUnusedPort();
+        await File.WriteAllTextAsync(bridgePath, $@"{{""port"":{port},""token"":""bridge-token"",""gameId"":""bridge-game""}}");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("GABS_GAME_ID", "bridge-game");
+            Environment.SetEnvironmentVariable("GABP_SERVER_PORT", null);
+            Environment.SetEnvironmentVariable("GABP_TOKEN", null);
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", bridgePath);
+
+            var server = Gabp.CreateGabsAwareServer("Test App", "1.0.0", fallbackPort: 9999);
+            await server.StartAsync();
+
+            Assert.Equal(9999, server.Port);
+            Assert.NotEqual(port, server.Port);
+            Assert.NotEqual("bridge-token", server.Token);
+
+            await server.StopAsync();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GABS_GAME_ID", null);
+            Environment.SetEnvironmentVariable("GABP_SERVER_PORT", null);
+            Environment.SetEnvironmentVariable("GABP_TOKEN", null);
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void IsRunningUnderGabs_ReturnsFalse_WhenOnlyBridgePathIsAvailable()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "libgab-bridge-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var bridgePath = Path.Combine(tempDir, "bridge.json");
+        var port = GetUnusedPort();
+        File.WriteAllText(bridgePath, $@"{{""port"":{port},""token"":""bridge-token"",""gameId"":""bridge-game""}}");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("GABS_GAME_ID", "bridge-game");
+            Environment.SetEnvironmentVariable("GABP_SERVER_PORT", null);
+            Environment.SetEnvironmentVariable("GABP_TOKEN", null);
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", bridgePath);
+
+            Assert.False(Gabp.IsRunningUnderGabs());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GABS_GAME_ID", null);
+            Environment.SetEnvironmentVariable("GABP_SERVER_PORT", null);
+            Environment.SetEnvironmentVariable("GABP_TOKEN", null);
+            Environment.SetEnvironmentVariable("GABS_BRIDGE_PATH", null);
+            Directory.Delete(tempDir, recursive: true);
         }
     }
 
@@ -164,4 +266,18 @@ public class GabsIntegrationTests
             return new { success = true };
         }
     }
+
+    private static int GetUnusedPort()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
+}
+
+[CollectionDefinition("GabsEnvironment", DisableParallelization = true)]
+public class GabsEnvironmentCollection
+{
 }

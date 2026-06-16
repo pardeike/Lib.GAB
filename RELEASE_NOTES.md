@@ -1,5 +1,15 @@
 # Release Notes
 
+## 1.0.3
+
+This release hardens GABS-aware startup so embedded hosts use the live runtime contract only.
+
+### Highlights
+
+- Automatic GABS detection now requires `GABP_SERVER_PORT` and `GABP_TOKEN`.
+- GABS-aware startup ignores `GABS_BRIDGE_PATH` and `~/.gabs/<gameId>/bridge.json`; those files are GABS-owned internal/debug state.
+- Environment-supplied ports must be in the valid TCP port range before Lib.GAB treats the process as running under GABS.
+
 ## 1.0.2
 
 This release lets bridge hosts publish simple machine-readable tool tags.
