@@ -17,9 +17,10 @@ namespace Lib.GAB.Transport
     public class TcpConnection : IConnection
     {
         internal readonly TcpClient _client;
-        private readonly NetworkStream _stream;
+        private readonly Stream _stream;
         private readonly string _id;
         private readonly CancellationTokenSource _cancellationTokenSource;
+        private readonly SemaphoreSlim _sendLock;
         private bool _disposed;
 
         public string Id => _id;
@@ -28,11 +29,17 @@ namespace Lib.GAB.Transport
         public event EventHandler Disconnected;
 
         public TcpConnection(TcpClient client)
+            : this(client, client?.GetStream() ?? throw new ArgumentNullException(nameof(client)))
         {
-            _client = client;
-            _stream = client.GetStream();
+        }
+
+        internal TcpConnection(TcpClient client, Stream stream)
+        {
+            _client = client ?? throw new ArgumentNullException(nameof(client));
+            _stream = stream ?? throw new ArgumentNullException(nameof(stream));
             _id = Guid.NewGuid().ToString();
             _cancellationTokenSource = new CancellationTokenSource();
+            _sendLock = new SemaphoreSlim(1, 1);
         }
 
         public async Task SendMessageAsync(GabpMessage message, CancellationToken cancellationToken = default(CancellationToken))
@@ -45,15 +52,27 @@ namespace Lib.GAB.Transport
             var jsonBytes = Encoding.UTF8.GetBytes(json);
             var header = $"Content-Length: {jsonBytes.Length}\r\nContent-Type: application/json\r\n\r\n";
             var headerBytes = Encoding.UTF8.GetBytes(header);
+            var frameBytes = new byte[headerBytes.Length + jsonBytes.Length];
+            Buffer.BlockCopy(headerBytes, 0, frameBytes, 0, headerBytes.Length);
+            Buffer.BlockCopy(jsonBytes, 0, frameBytes, headerBytes.Length, jsonBytes.Length);
 
             using (var linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken, _cancellationTokenSource.Token))
             {
                 var combinedToken = linkedTokenSource.Token;
+                await _sendLock.WaitAsync(combinedToken).ConfigureAwait(false);
+                try
+                {
+                    if (_disposed || !IsConnected)
+                        throw new InvalidOperationException("Connection is not active");
 
-                await _stream.WriteAsync(headerBytes, 0, headerBytes.Length, combinedToken);
-                await _stream.WriteAsync(jsonBytes, 0, jsonBytes.Length, combinedToken);
-                await _stream.FlushAsync(combinedToken);
+                    await _stream.WriteAsync(frameBytes, 0, frameBytes.Length, combinedToken).ConfigureAwait(false);
+                    await _stream.FlushAsync(combinedToken).ConfigureAwait(false);
+                }
+                finally
+                {
+                    _sendLock.Release();
+                }
             }
         }
 
