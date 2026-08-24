@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
@@ -72,6 +73,78 @@ public class GabpServerTransportTests
             using var responseDoc = JsonDocument.Parse(response);
             Assert.Equal("response", responseDoc.RootElement.GetProperty("type").GetString());
             Assert.Equal(8, responseDoc.RootElement.GetProperty("result").GetInt32());
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task ToolsCallBindsObjectDictionaryAndRejectsArrayShape()
+    {
+        using var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new TransportTestTools());
+
+        await server.StartAsync();
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", server.Port);
+            using var stream = client.GetStream();
+
+            await EstablishAuthenticatedSessionAsync(stream, server.Token);
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440011",
+                type = "request",
+                method = "tools/call",
+                @params = new
+                {
+                    name = "settings/apply",
+                    parameters = new
+                    {
+                        values = new Dictionary<string, object>
+                        {
+                            ["camera.zoom"] = 20,
+                            ["camera.follow"] = true
+                        }
+                    }
+                }
+            });
+
+            using (var successDoc = JsonDocument.Parse(await ReadFrameAsync(stream)))
+            {
+                Assert.Equal(2, successDoc.RootElement.GetProperty("result").GetInt32());
+            }
+
+            await SendFrameAsync(stream, new
+            {
+                v = "gabp/1",
+                id = "550e8400-e29b-41d4-a716-446655440012",
+                type = "request",
+                method = "tools/call",
+                @params = new
+                {
+                    name = "settings/apply",
+                    parameters = new
+                    {
+                        values = new[]
+                        {
+                            new { path = "camera.zoom", value = 20 }
+                        }
+                    }
+                }
+            });
+
+            using var errorDoc = JsonDocument.Parse(await ReadFrameAsync(stream));
+            var error = errorDoc.RootElement.GetProperty("error");
+            Assert.Equal(-32602, error.GetProperty("code").GetInt32());
+            Assert.Contains("parameter 'values'", error.GetProperty("message").GetString());
+            Assert.Contains("tool 'settings/apply'", error.GetProperty("message").GetString());
         }
         finally
         {
@@ -167,9 +240,10 @@ public class GabpServerTransportTests
 
             var toolsList = await ReadFrameAsync(stream);
             using var document = JsonDocument.Parse(toolsList);
-            var tool = document.RootElement
+            var tools = document.RootElement
                 .GetProperty("result")
-                .GetProperty("tools")
+                .GetProperty("tools");
+            var tool = tools
                 .EnumerateArray()
                 .Single(entry => entry.GetProperty("name").GetString() == "math/add");
 
@@ -199,6 +273,18 @@ public class GabpServerTransportTests
             Assert.Equal(new[] { "diagnostic", "read-only" }, tags.EnumerateArray().Select(tag => tag.GetString()).ToArray());
             Assert.True(tool.TryGetProperty("requiresAuth", out var requiresAuth));
             Assert.True(requiresAuth.GetBoolean());
+
+            var settingsTool = tools
+                .EnumerateArray()
+                .Single(entry => entry.GetProperty("name").GetString() == "settings/apply");
+            var valuesSchema = settingsTool
+                .GetProperty("inputSchema")
+                .GetProperty("properties")
+                .GetProperty("values");
+            Assert.Equal("object", valuesSchema.GetProperty("type").GetString());
+            var additionalProperties = valuesSchema.GetProperty("additionalProperties");
+            Assert.Equal(JsonValueKind.Object, additionalProperties.ValueKind);
+            Assert.Empty(additionalProperties.EnumerateObject());
         }
         finally
         {
@@ -637,6 +723,13 @@ public class GabpServerTransportTests
             [ToolParameter(Description = "Second number")] int b)
         {
             return a + b;
+        }
+
+        [Tool("settings/apply", Description = "Apply setting values")]
+        public int ApplySettings(
+            [ToolParameter(Description = "Settings keyed by path")] Dictionary<string, object> values)
+        {
+            return values.Count;
         }
     }
 }
