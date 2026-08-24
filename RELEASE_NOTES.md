@@ -1,5 +1,15 @@
 # Release Notes
 
+## 1.0.4
+
+This release prevents concurrent outbound messages from corrupting a GABP TCP stream.
+
+### Highlights
+
+- Each connection now serializes response, event, and attention writes through one asynchronous send gate.
+- Every `Content-Length` header and JSON body is assembled and written as one complete frame.
+- A deterministic concurrency regression test verifies that simultaneous sends remain distinct, parseable GABP messages.
+
 ## 1.0.3
 
 This release hardens GABS-aware startup so embedded hosts use the live runtime contract only.
