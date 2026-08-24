@@ -1,5 +1,15 @@
 # Release Notes
 
+## 1.0.5
+
+This release makes dictionary-shaped tool parameters discoverable and callable through the same contract.
+
+### Highlights
+
+- Dictionary parameters are now advertised as JSON objects instead of arrays, including an `additionalProperties` schema for their values.
+- Supplied values that cannot be converted to a tool parameter's declared type now return the standard `InvalidParams` protocol error.
+- Invalid supplied values are no longer silently replaced with `null` or a parameter default.
+
 ## 1.0.4
 
 This release prevents concurrent outbound messages from corrupting a GABP TCP stream.

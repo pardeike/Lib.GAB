@@ -324,10 +324,7 @@ namespace Lib.GAB.Server
 
             foreach (var parameter in parameters)
             {
-                var property = new Dictionary<string, object>
-                {
-                    ["type"] = MapTypeToJsonSchemaType(parameter.Type)
-                };
+                var property = BuildParameterSchema(parameter.Type);
 
                 if (!string.IsNullOrWhiteSpace(parameter.Description))
                 {
@@ -357,6 +354,26 @@ namespace Lib.GAB.Server
             if (required.Count > 0)
             {
                 schema["required"] = required;
+            }
+
+            return schema;
+        }
+
+        private static Dictionary<string, object> BuildParameterSchema(Type type)
+        {
+            var schema = new Dictionary<string, object>
+            {
+                ["type"] = MapTypeToJsonSchemaType(type)
+            };
+
+            if (TryGetDictionaryValueType(type, out var valueType))
+            {
+                schema["additionalProperties"] = valueType == typeof(object)
+                    ? new Dictionary<string, object>()
+                    : new Dictionary<string, object>
+                    {
+                        ["type"] = MapTypeToJsonSchemaType(valueType)
+                    };
             }
 
             return schema;
@@ -454,12 +471,43 @@ namespace Lib.GAB.Server
                 return "number";
             }
 
+            if (TryGetDictionaryValueType(targetType, out _))
+            {
+                return "object";
+            }
+
             if (targetType != typeof(string) && typeof(System.Collections.IEnumerable).IsAssignableFrom(targetType))
             {
                 return "array";
             }
 
             return "object";
+        }
+
+        private static bool TryGetDictionaryValueType(Type type, out Type valueType)
+        {
+            var targetType = Nullable.GetUnderlyingType(type) ?? type;
+            var dictionaryType = new[] { targetType }
+                .Concat(targetType.GetInterfaces())
+                .FirstOrDefault(candidate =>
+                    candidate.IsGenericType &&
+                    (candidate.GetGenericTypeDefinition() == typeof(IDictionary<,>) ||
+                     candidate.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)));
+
+            if (dictionaryType != null)
+            {
+                valueType = dictionaryType.GetGenericArguments()[1];
+                return true;
+            }
+
+            if (typeof(System.Collections.IDictionary).IsAssignableFrom(targetType))
+            {
+                valueType = typeof(object);
+                return true;
+            }
+
+            valueType = null;
+            return false;
         }
 
         private async Task HandleToolsCallAsync(IConnection connection, GabpRequest request)
@@ -509,6 +557,11 @@ namespace Lib.GAB.Server
                 var result = await _toolRegistry.CallToolAsync(toolName, arguments);
                 
                 await SendResponseAsync(connection, request.Id, result);
+            }
+            catch (ToolParameterBindingException ex)
+            {
+                await SendErrorResponseAsync(connection, request.Id,
+                    GabpErrorCodes.InvalidParams, ex.Message);
             }
             catch (Exception ex)
             {

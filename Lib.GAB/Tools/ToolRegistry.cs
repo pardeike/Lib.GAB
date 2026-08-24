@@ -9,6 +9,14 @@ using Newtonsoft.Json;
 
 namespace Lib.GAB.Tools
 {
+    internal sealed class ToolParameterBindingException : Exception
+    {
+        public ToolParameterBindingException(string message, Exception innerException)
+            : base(message, innerException)
+        {
+        }
+    }
+
     /// <summary>
     /// Default implementation of the tool registry
     /// </summary>
@@ -84,7 +92,7 @@ namespace Lib.GAB.Tools
                     ResponseFields = GetResponseFieldInfo(method)
                 };
 
-                RegisterTool(toolAttr.Name, CreateHandler(method, instance), toolInfo);
+                RegisterTool(toolAttr.Name, CreateHandler(method, instance, toolAttr.Name), toolInfo);
             }
         }
 
@@ -164,13 +172,13 @@ namespace Lib.GAB.Tools
             return fields;
         }
 
-        private Func<object, Task<object>> CreateHandler(MethodInfo method, object instance)
+        private Func<object, Task<object>> CreateHandler(MethodInfo method, object instance, string toolName)
         {
             return async (parameters) =>
             {
                 try
                 {
-                    var paramValues = ConvertParameters(method, parameters);
+                    var paramValues = ConvertParameters(method, parameters, toolName);
                     var result = method.Invoke(instance, paramValues);
                     
                     if (result is Task task)
@@ -188,6 +196,10 @@ namespace Lib.GAB.Tools
                     
                     return result;
                 }
+                catch (ToolParameterBindingException)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     throw new InvalidOperationException($"Error calling tool '{method.Name}': {ex.Message}", ex);
@@ -195,7 +207,7 @@ namespace Lib.GAB.Tools
             };
         }
 
-        private object[] ConvertParameters(MethodInfo method, object parameters)
+        private object[] ConvertParameters(MethodInfo method, object parameters, string toolName)
         {
             var methodParams = method.GetParameters();
             var paramValues = new object[methodParams.Length];
@@ -253,9 +265,9 @@ namespace Lib.GAB.Tools
                         var value = paramDict[param.Name];
                         paramValues[i] = ConvertValue(value, param.ParameterType);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        paramValues[i] = GetDefaultValue(param, param.GetCustomAttribute<ToolParameterAttribute>());
+                        throw CreateParameterBindingException(toolName, param, ex);
                     }
                 }
                 else if (paramDict.Keys.FirstOrDefault(k => k.Equals(param.Name, StringComparison.OrdinalIgnoreCase)) is string caseInsensitiveMatch)
@@ -267,9 +279,9 @@ namespace Lib.GAB.Tools
                         var value = paramDict[caseInsensitiveMatch];
                         paramValues[i] = ConvertValue(value, param.ParameterType);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        paramValues[i] = GetDefaultValue(param, param.GetCustomAttribute<ToolParameterAttribute>());
+                        throw CreateParameterBindingException(toolName, param, ex);
                     }
                 }
                 else
@@ -279,6 +291,16 @@ namespace Lib.GAB.Tools
             }
             
             return paramValues;
+        }
+
+        private static ToolParameterBindingException CreateParameterBindingException(
+            string toolName,
+            ParameterInfo parameter,
+            Exception innerException)
+        {
+            return new ToolParameterBindingException(
+                $"Invalid value for parameter '{parameter.Name}' in tool '{toolName}'; expected {parameter.ParameterType.Name}.",
+                innerException);
         }
 
         private object ConvertValue(object value, Type targetType)
