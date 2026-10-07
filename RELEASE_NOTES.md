@@ -1,5 +1,17 @@
 # Release Notes
 
+## 1.0.6
+
+This release lets attribute-bound tools tell callers which supplied arguments were ignored.
+
+### Highlights
+
+- New `ToolCallContext.Current` exposes the tool name, raw supplied arguments, declared parameter names, and `UnrecognizedArguments` while a tool method registered through `RegisterToolsFromInstance` or `RegisterToolsFromAssembly` runs, including async continuations.
+- Keys that match a parameter only case-insensitively are still bound and are not reported as unrecognized.
+- Unrecognized arguments are still ignored and still produce the existing trace warning; tool schemas, binding, and the wire protocol are unchanged.
+- `ToolCallContext.Current` is `null` outside a tool call and for handlers registered through `RegisterTool`.
+- Tool methods returning `ValueTask` or `ValueTask<T>` are now awaited like `Task` and `Task<T>`; previously the unawaited `ValueTask` value itself was returned.
+
 ## 1.0.5
 
 This release makes dictionary-shaped tool parameters discoverable and callable through the same contract.

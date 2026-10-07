@@ -294,6 +294,21 @@ var server = Gabp.CreateServerWithInstance("My Host Product", "1.0.0", hostTools
 await server.StartAsync();
 ```
 
+### Reporting Ignored Arguments
+
+Unknown argument keys are ignored during binding. Inside an attribute-bound tool method, `ToolCallContext.Current` tells you which keys were ignored so you can warn the caller:
+
+```csharp
+[Tool("data/list", Description = "List data")]
+public object ListData(string filter = null)
+{
+    var ignored = ToolCallContext.Current?.UnrecognizedArguments ?? Array.Empty<string>();
+    return new { items = Find(filter), warnings = ignored.Select(name => $"Unknown argument '{name}' was ignored.") };
+}
+```
+
+The context flows through `async` continuations, is `null` outside tool calls, and is not set for handlers registered with `RegisterTool`.
+
 ### Documenting Tool Responses
 
 Use `ResultDescription` when you want to describe what a successful result means or what useful handle it returns. Lib.GAB emits that text as the root `description` of `outputSchema`.
