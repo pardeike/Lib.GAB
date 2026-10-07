@@ -4,7 +4,7 @@
     <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <PackageId>Lib.GAB</PackageId>
-    <Version>1.0.5</Version>
+    <Version>1.0.6</Version>
     <Authors>GABP Contributors</Authors>
     <Description>Host-side GABP server library for teams embedding tool, event, and attention surfaces into game mods, automation bridges, and product-specific runtimes.</Description>
     <PackageTags>gabp;game-agent-bridge-protocol;server;modding;automation</PackageTags>
@@ -12,7 +12,7 @@
     <RepositoryUrl>https://github.com/pardeike/Lib.GAB</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageReleaseNotes>Describe dictionary tool parameters as JSON objects and reject incompatible supplied argument shapes with invalid-params errors instead of silently substituting defaults.</PackageReleaseNotes>
+    <PackageReleaseNotes>Expose ToolCallContext.Current so attribute-bound tool methods can see the call's tool name, raw arguments, and unrecognized argument names, and await ValueTask-returning tool methods.</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>

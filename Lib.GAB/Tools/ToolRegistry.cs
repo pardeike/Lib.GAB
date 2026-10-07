@@ -176,12 +176,18 @@ namespace Lib.GAB.Tools
         {
             return async (parameters) =>
             {
+                var contextEntered = false;
+                ToolCallContext previousContext = null;
                 try
                 {
-                    var paramValues = ConvertParameters(method, parameters, toolName);
+                    var paramValues = ConvertParameters(method, parameters, toolName, out var callContext);
+                    previousContext = ToolCallContext.Enter(callContext);
+                    contextEntered = true;
+
                     var result = method.Invoke(instance, paramValues);
-                    
-                    if (result is Task task)
+                    var task = result as Task ?? AsTaskIfValueTask(result);
+
+                    if (task != null)
                     {
                         await task;
                         
@@ -204,16 +210,40 @@ namespace Lib.GAB.Tools
                 {
                     throw new InvalidOperationException($"Error calling tool '{method.Name}': {ex.Message}", ex);
                 }
+                finally
+                {
+                    if (contextEntered)
+                        ToolCallContext.Restore(previousContext);
+                }
             };
         }
 
-        private object[] ConvertParameters(MethodInfo method, object parameters, string toolName)
+        private static Task AsTaskIfValueTask(object result)
+        {
+            if (result == null)
+                return null;
+
+            var type = result.GetType();
+            if (!type.IsValueType)
+                return null;
+
+            var typeName = type.IsGenericType ? type.GetGenericTypeDefinition().FullName : type.FullName;
+            if (typeName != "System.Threading.Tasks.ValueTask" && typeName != "System.Threading.Tasks.ValueTask`1")
+                return null;
+
+            return type.GetMethod("AsTask", Type.EmptyTypes)?.Invoke(result, null) as Task;
+        }
+
+        private object[] ConvertParameters(MethodInfo method, object parameters, string toolName, out ToolCallContext callContext)
         {
             var methodParams = method.GetParameters();
             var paramValues = new object[methodParams.Length];
+            var methodParamNames = methodParams.Select(p => p.Name).ToArray();
             
             if (parameters == null)
             {
+                callContext = new ToolCallContext(toolName, null, methodParamNames, null);
+
                 // Use default values
                 for (int i = 0; i < methodParams.Length; i++)
                 {
@@ -235,7 +265,7 @@ namespace Lib.GAB.Tools
             }
 
             // Warn about unrecognized keys that don't match any method parameter
-            var methodParamNames = methodParams.Select(p => p.Name).ToArray();
+            var unrecognizedKeys = new List<string>();
             var exactMethodParamNames = new HashSet<string>(methodParamNames, StringComparer.Ordinal);
             foreach (var key in paramDict.Keys)
             {
@@ -251,8 +281,11 @@ namespace Lib.GAB.Tools
                     continue;
                 }
 
+                unrecognizedKeys.Add(key);
                 Trace.TraceWarning($"[ToolRegistry] Tool '{method.Name}': unrecognized parameter '{key}'. Known parameters: [{string.Join(", ", methodParamNames)}]");
             }
+
+            callContext = new ToolCallContext(toolName, paramDict, methodParamNames, unrecognizedKeys);
 
             for (int i = 0; i < methodParams.Length; i++)
             {
