@@ -175,7 +175,7 @@ namespace Lib.GAB.Transport
         {
             var stream = connection._client.GetStream();
             var buffer = new byte[8192];
-            var messageBuffer = new StringBuilder();
+            var messageBuffer = new MemoryStream();
 
             try
             {
@@ -184,8 +184,10 @@ namespace Lib.GAB.Transport
                     var bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
                     if (bytesRead == 0) break;
 
-                    var data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    messageBuffer.Append(data);
+                    // Frames are delimited in bytes: Content-Length counts UTF-8
+                    // bytes, and a multibyte character can straddle two reads. So
+                    // buffer raw bytes and decode each body only once it is whole.
+                    messageBuffer.Write(buffer, 0, bytesRead);
 
                     // Process complete messages
                     await ProcessMessagesAsync(connection, messageBuffer, cancellationToken);
@@ -201,16 +203,17 @@ namespace Lib.GAB.Transport
             }
         }
 
-        private Task ProcessMessagesAsync(TcpConnection connection, StringBuilder buffer, CancellationToken cancellationToken)
+        private Task ProcessMessagesAsync(TcpConnection connection, MemoryStream buffer, CancellationToken cancellationToken)
         {
             while (true)
             {
-                var content = buffer.ToString();
-                var headerEnd = content.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+                var content = buffer.GetBuffer();
+                var length = (int)buffer.Length;
+                var headerEnd = IndexOfHeaderEnd(content, length);
                 
                 if (headerEnd == -1) break; // No complete header yet
 
-                var headerText = content.Substring(0, headerEnd);
+                var headerText = Encoding.ASCII.GetString(content, 0, headerEnd);
                 var contentLengthIndex = headerText.IndexOf("Content-Length:", StringComparison.OrdinalIgnoreCase);
                 
                 if (contentLengthIndex == -1) break;
@@ -224,9 +227,9 @@ namespace Lib.GAB.Transport
                 if (!int.TryParse(contentLengthStr, out var contentLength)) break;
 
                 var messageStart = headerEnd + 4;
-                if (content.Length < messageStart + contentLength) break; // Incomplete message
+                if (length < messageStart + contentLength) break; // Incomplete message
 
-                var messageJson = content.Substring(messageStart, contentLength);
+                var messageJson = Encoding.UTF8.GetString(content, messageStart, contentLength);
                 
                 try
                 {
@@ -242,10 +245,28 @@ namespace Lib.GAB.Transport
                 }
 
                 // Remove processed message from buffer
-                buffer.Remove(0, messageStart + contentLength);
+                var consumed = messageStart + contentLength;
+                var remaining = length - consumed;
+                Buffer.BlockCopy(content, consumed, content, 0, remaining);
+                buffer.SetLength(remaining);
+                buffer.Position = remaining;
             }
 
             return Task.FromResult(0);
+        }
+
+        private static int IndexOfHeaderEnd(byte[] content, int length)
+        {
+            for (var i = 0; i + 3 < length; i++)
+            {
+                if (content[i] == (byte)'\r' && content[i + 1] == (byte)'\n'
+                    && content[i + 2] == (byte)'\r' && content[i + 3] == (byte)'\n')
+                {
+                    return i;
+                }
+            }
+
+            return -1;
         }
 
         private static GabpMessage ParseMessage(string json)
