@@ -557,9 +557,105 @@ public class GabpServerTransportTests
         await AssertConnectionClosedAsync(stream);
     }
 
-    private static async Task SendFrameAsync(NetworkStream stream, object payload, bool includeContentType = true)
+    [Fact]
+    public async Task MultibyteRequestDoesNotCorruptFollowingFrames()
     {
-        var json = JsonSerializer.Serialize(payload);
+        using var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new TransportTestTools());
+
+        await server.StartAsync();
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", server.Port);
+            using var stream = client.GetStream();
+
+            await EstablishAuthenticatedSessionAsync(stream, server.Token);
+
+            // Content-Length counts UTF-8 bytes; "ñ" is two bytes but one char.
+            await SendFrameAsync(stream, EchoRequest("550e8400-e29b-41d4-a716-446655440020", "Mitasño"), rawUtf8: true);
+            using (var echoDoc = JsonDocument.Parse(await ReadFrameAsync(stream)))
+            {
+                Assert.Equal("Mitasño", echoDoc.RootElement.GetProperty("result").GetString());
+            }
+
+            await SendFrameAsync(stream, AddRequest("550e8400-e29b-41d4-a716-446655440021"));
+            using (var addDoc = JsonDocument.Parse(await ReadFrameAsync(stream)))
+            {
+                Assert.Equal(8, addDoc.RootElement.GetProperty("result").GetInt32());
+            }
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task MultibyteCharacterSplitAcrossReadsIsDecodedWhole()
+    {
+        using var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new TransportTestTools());
+
+        await server.StartAsync();
+
+        try
+        {
+            using var client = new TcpClient { NoDelay = true };
+            await client.ConnectAsync("127.0.0.1", server.Port);
+            using var stream = client.GetStream();
+
+            await EstablishAuthenticatedSessionAsync(stream, server.Token);
+
+            var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(
+                EchoRequest("550e8400-e29b-41d4-a716-446655440022", "Mitasño"), RawUtf8Json));
+            var header = Encoding.ASCII.GetBytes($"Content-Length: {body.Length}\r\n\r\n");
+            var split = Array.IndexOf(body, (byte)0xC3) + 1; // between the two bytes of "ñ"
+
+            await stream.WriteAsync(header, 0, header.Length);
+            await stream.WriteAsync(body, 0, split);
+            await stream.FlushAsync();
+            await Task.Delay(100);
+            await stream.WriteAsync(body, split, body.Length - split);
+            await stream.FlushAsync();
+
+            using var echoDoc = JsonDocument.Parse(await ReadFrameAsync(stream));
+            Assert.Equal("Mitasño", echoDoc.RootElement.GetProperty("result").GetString());
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
+    private static object EchoRequest(string id, string text) => new
+    {
+        v = "gabp/1",
+        id,
+        type = "request",
+        method = "tools/call",
+        @params = new { name = "text/echo", parameters = new { text } }
+    };
+
+    private static object AddRequest(string id) => new
+    {
+        v = "gabp/1",
+        id,
+        type = "request",
+        method = "tools/call",
+        @params = new { name = "math/add", parameters = new { a = 5, b = 3 } }
+    };
+
+    // Bridges such as GABS send non-ASCII text as raw UTF-8 bytes, not as escaped code points.
+    private static readonly JsonSerializerOptions RawUtf8Json = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
+    private static async Task SendFrameAsync(NetworkStream stream, object payload, bool includeContentType = true, bool rawUtf8 = false)
+    {
+        var json = rawUtf8 ? JsonSerializer.Serialize(payload, RawUtf8Json) : JsonSerializer.Serialize(payload);
         var body = Encoding.UTF8.GetBytes(json);
         var headerText = includeContentType
             ? $"Content-Length: {body.Length}\r\nContent-Type: application/json\r\n\r\n"
@@ -723,6 +819,13 @@ public class GabpServerTransportTests
             [ToolParameter(Description = "Second number")] int b)
         {
             return a + b;
+        }
+
+        [Tool("text/echo", Description = "Echo a string")]
+        public string Echo(
+            [ToolParameter(Description = "Text to echo")] string text)
+        {
+            return text;
         }
 
         [Tool("settings/apply", Description = "Apply setting values")]
