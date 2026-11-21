@@ -463,6 +463,14 @@ await server.Events.EmitEventAsync("channel/name", eventData);
 var channels = server.Events.GetAvailableChannels();
 ```
 
+## Local verification
+
+Run `python3 scripts/check-quiet.py` to run Release tests and pack both library targets, matching CI.
+For focused tests, use `python3 scripts/check-quiet.py --filter FullyQualifiedName~TcpTransport`.
+The filtered command does not pack.
+Both commands retain full output in ignored `artifacts/logs/` files and print `ok` only after success.
+Neither command installs or publishes packages.
+
 ## Protocol Compliance
 
 Lib.GAB implements GABP 1.0 specification including:
