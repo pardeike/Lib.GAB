@@ -1,5 +1,14 @@
 # Release Notes
 
+## 1.0.7
+
+This release keeps the host process alive when a bridge disconnects during a request, and reads non-ASCII messages correctly.
+
+### Highlights
+
+- A request that fails after its connection closed no longer terminates the host process. The server used to send an error reply over the closed connection, and that second exception escaped an `async void` handler. Now the server skips the reply when the connection is closed, and a reply that still fails only produces a trace warning.
+- The TCP reader treats `Content-Length` as a byte count. Message bodies with non-ASCII text no longer desynchronize the stream, and a multi-byte character split across socket reads stays intact.
+
 ## 1.0.6
 
 This release lets attribute-bound tools tell callers which supplied arguments were ignored.

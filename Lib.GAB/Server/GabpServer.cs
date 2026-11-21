@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Globalization;
@@ -140,7 +141,7 @@ namespace Lib.GAB.Server
             _transport.MessageReceived += OnMessageReceived;
         }
 
-        private void OnConnectionEstablished(object sender, ConnectionEstablishedEventArgs e)
+        internal void OnConnectionEstablished(object sender, ConnectionEstablishedEventArgs e)
         {
             _sessions[e.Connection.Id] = new SessionInfo
             {
@@ -158,12 +159,41 @@ namespace Lib.GAB.Server
         {
             try
             {
-                await HandleMessageAsync(e.Connection, e.Message);
+                await ProcessMessageAsync(e.Connection, e.Message);
+            }
+            catch
+            {
+                // Last resort: even a throwing trace listener must not escape this async void handler.
+            }
+        }
+
+        internal int SessionCount => _sessions.Count;
+
+        // OnMessageReceived is async void, so an exception that leaves this method terminates the host process.
+        internal async Task ProcessMessageAsync(IConnection connection, GabpMessage message)
+        {
+            try
+            {
+                await HandleMessageAsync(connection, message);
             }
             catch (Exception ex)
             {
-                await SendErrorResponseAsync(e.Connection, e.Message.Id, 
-                    GabpErrorCodes.InternalError, $"Internal server error: {ex.Message}");
+                if (!connection.IsConnected)
+                {
+                    Trace.TraceWarning($"[GabpServer] Dropped request '{message.Id}' after its connection closed: {ex.Message}");
+                    return;
+                }
+
+                try
+                {
+                    await SendErrorResponseAsync(connection, message.Id,
+                        GabpErrorCodes.InternalError, $"Internal server error: {ex.Message}");
+                }
+                catch (Exception replyException)
+                {
+                    // The connection can close between the check above and the reply.
+                    Trace.TraceWarning($"[GabpServer] Could not send the error reply for request '{message.Id}': {replyException.Message}");
+                }
             }
         }
 

@@ -604,7 +604,7 @@ public class GabpServerTransportTests
         }
     }
 
-    private static async Task SendFrameAsync(NetworkStream stream, object payload, bool includeContentType = true)
+    internal static async Task SendFrameAsync(NetworkStream stream, object payload, bool includeContentType = true)
     {
         var json = JsonSerializer.Serialize(payload);
         var body = Encoding.UTF8.GetBytes(json);
@@ -618,7 +618,7 @@ public class GabpServerTransportTests
         await stream.FlushAsync();
     }
 
-    private static async Task<string> ReadFrameAsync(NetworkStream stream)
+    internal static async Task<string> ReadFrameAsync(NetworkStream stream)
     {
         var headerBuffer = new StringBuilder();
         var oneByte = new byte[1];
@@ -716,7 +716,7 @@ public class GabpServerTransportTests
         };
     }
 
-    private static async Task EstablishAuthenticatedSessionAsync(NetworkStream stream, string token)
+    internal static async Task EstablishAuthenticatedSessionAsync(NetworkStream stream, string token)
     {
         await SendFrameAsync(stream, new
         {
