@@ -37,10 +37,16 @@ jobs:
     needs: verify-package
     if: (github.event_name == 'release') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # NuGet trusted publishing exchanges this OIDC token for a short-lived API key.
+      id-token: write
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v6.0.2
+      with:
+        ref: ${{ github.event.release.tag_name || inputs.release_tag }}
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5.0.0
@@ -63,9 +69,15 @@ jobs:
     - name: Pack Lib.GAB
       run: dotnet pack Lib.GAB/Lib.GAB.csproj --configuration Release
 
+    - name: Log in to NuGet with trusted publishing
+      id: nuget-login
+      uses: NuGet/login@v1
+      with:
+        user: pardeike
+
     - name: Publish package to NuGet
       env:
-        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
       run: |
         dotnet nuget push Lib.GAB/bin/Release/*.nupkg \
           --api-key "$NUGET_API_KEY" \
