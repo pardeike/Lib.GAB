@@ -175,7 +175,7 @@ namespace Lib.GAB.Transport
         {
             var stream = connection._client.GetStream();
             var buffer = new byte[8192];
-            var messageBuffer = new StringBuilder();
+            var messageBuffer = new MemoryStream();
 
             try
             {
@@ -184,8 +184,8 @@ namespace Lib.GAB.Transport
                     var bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
                     if (bytesRead == 0) break;
 
-                    var data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    messageBuffer.Append(data);
+                    // Keep bytes until a complete body is available, including split UTF-8 sequences.
+                    messageBuffer.Write(buffer, 0, bytesRead);
 
                     // Process complete messages
                     await ProcessMessagesAsync(connection, messageBuffer, cancellationToken);
@@ -197,20 +197,30 @@ namespace Lib.GAB.Transport
             }
             finally
             {
+                messageBuffer.Dispose();
                 connection.Dispose();
             }
         }
 
-        private Task ProcessMessagesAsync(TcpConnection connection, StringBuilder buffer, CancellationToken cancellationToken)
+        internal Task ProcessMessagesAsync(TcpConnection connection, MemoryStream buffer, CancellationToken cancellationToken)
         {
             while (true)
             {
-                var content = buffer.ToString();
-                var headerEnd = content.IndexOf("\r\n\r\n", StringComparison.Ordinal);
+                var content = buffer.GetBuffer();
+                var headerEnd = -1;
+                for (var index = 0; index + 3 < buffer.Length; index++)
+                {
+                    if (content[index] == '\r' && content[index + 1] == '\n'
+                        && content[index + 2] == '\r' && content[index + 3] == '\n')
+                    {
+                        headerEnd = index;
+                        break;
+                    }
+                }
                 
                 if (headerEnd == -1) break; // No complete header yet
 
-                var headerText = content.Substring(0, headerEnd);
+                var headerText = Encoding.ASCII.GetString(content, 0, headerEnd);
                 var contentLengthIndex = headerText.IndexOf("Content-Length:", StringComparison.OrdinalIgnoreCase);
                 
                 if (contentLengthIndex == -1) break;
@@ -224,9 +234,13 @@ namespace Lib.GAB.Transport
                 if (!int.TryParse(contentLengthStr, out var contentLength)) break;
 
                 var messageStart = headerEnd + 4;
-                if (content.Length < messageStart + contentLength) break; // Incomplete message
+                // Preserve receive failure for negative lengths or lengths that overflow a frame offset.
+                if (contentLength < 0 || contentLength > int.MaxValue - messageStart)
+                    throw new ArgumentOutOfRangeException(nameof(contentLength));
+                // Content-Length counts bytes, not UTF-16 characters. Subtraction avoids overflow.
+                if (buffer.Length - messageStart < contentLength) break; // Incomplete message
 
-                var messageJson = content.Substring(messageStart, contentLength);
+                var messageJson = Encoding.UTF8.GetString(content, messageStart, contentLength);
                 
                 try
                 {
@@ -242,7 +256,11 @@ namespace Lib.GAB.Transport
                 }
 
                 // Remove processed message from buffer
-                buffer.Remove(0, messageStart + contentLength);
+                var frameLength = messageStart + contentLength;
+                var remaining = (int)buffer.Length - frameLength;
+                Buffer.BlockCopy(content, frameLength, content, 0, remaining);
+                buffer.SetLength(remaining);
+                buffer.Position = remaining;
             }
 
             return Task.FromResult(0);

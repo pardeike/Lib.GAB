@@ -557,6 +557,53 @@ public class GabpServerTransportTests
         await AssertConnectionClosedAsync(stream);
     }
 
+    [Theory]
+    [InlineData("ASCII")]
+    [InlineData("Mitasño é Ω Щ ユニティ 🚀")]
+    public async Task RawUtf8ToolCallAndFollowingFrameRemainSynchronized(string text)
+    {
+        using var server = Gabp.CreateSimpleServer("Test App", "1.0.0");
+        server.Tools.RegisterToolsFromInstance(new TransportTestTools());
+        await server.StartAsync();
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync("127.0.0.1", server.Port);
+            using var stream = client.GetStream();
+            await EstablishAuthenticatedSessionAsync(stream, server.Token);
+
+            // Newtonsoft emits literal UTF-8, including the four-byte emoji.
+            var echo = Newtonsoft.Json.JsonConvert.SerializeObject(new
+            {
+                v = "gabp/1", id = "550e8400-e29b-41d4-a716-4466554400a0", type = "request",
+                method = "tools/call", @params = new { name = "text/echo", parameters = new { text } }
+            });
+            var add = Newtonsoft.Json.JsonConvert.SerializeObject(new
+            {
+                v = "gabp/1", id = "550e8400-e29b-41d4-a716-4466554400a1", type = "request",
+                method = "tools/call", @params = new { name = "math/add", parameters = new { a = 20, b = 22 } }
+            });
+            var frames = new[] { echo, add }.SelectMany(json =>
+            {
+                var body = Encoding.UTF8.GetBytes(json);
+                return Encoding.ASCII.GetBytes($"Content-Length: {body.Length}\r\n\r\n").Concat(body);
+            }).ToArray();
+            await stream.WriteAsync(frames);
+
+            using var echoResponse = JsonDocument.Parse(await ReadFrameAsync(stream).WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal("550e8400-e29b-41d4-a716-4466554400a0", echoResponse.RootElement.GetProperty("id").GetString());
+            Assert.Equal(text, echoResponse.RootElement.GetProperty("result").GetString());
+            using var addResponse = JsonDocument.Parse(await ReadFrameAsync(stream).WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Equal("550e8400-e29b-41d4-a716-4466554400a1", addResponse.RootElement.GetProperty("id").GetString());
+            Assert.Equal(42, addResponse.RootElement.GetProperty("result").GetInt32());
+        }
+        finally
+        {
+            await server.StopAsync();
+        }
+    }
+
     private static async Task SendFrameAsync(NetworkStream stream, object payload, bool includeContentType = true)
     {
         var json = JsonSerializer.Serialize(payload);
@@ -717,6 +764,9 @@ public class GabpServerTransportTests
 
     private sealed class TransportTestTools
     {
+        [Tool("text/echo", Description = "Echo text")]
+        public string Echo(string text) => text;
+
         [Tool("math/add", Title = "Add Numbers", Description = "Add two numbers", ResultDescription = "Returns the sum of the two inputs as an integer.", Tags = new[] { "diagnostic", "read-only" })]
         public int Add(
             [ToolParameter(Description = "First number")] int a,
